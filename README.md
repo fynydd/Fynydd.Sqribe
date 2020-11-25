@@ -1,5 +1,5 @@
 
-<center><img src="https://sqribe.app/images/sqribe-advert.png" width="640" /></center>
+<center><img src="https://sqribe.app/images/sqribe-advert.png" width="100%" /></center>
 
 # SQribe for Microsoft SQL Server
 
