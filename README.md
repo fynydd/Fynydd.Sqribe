@@ -7,6 +7,8 @@ Backup and restore Microsoft SQL Server databases on Windows, macOS, and Linux.
 
 SQribe is a 64-bit .NET 5.0 command line (CLI) tool that allows users to connect to a Microsoft SQL Server 2008 or later instance and create backup scripts for use in cloning a database or easily versioning database changes in source control. Backup and restore operations are multi-threaded.
 
+Visit the website at [https://sqribe.app](https://sqribe.app) for documentation, introductory videos, and more.
+
 **Examples of how SQribe can help you:**
 
 - Backup a local or remote SQL Server database to T-SQL script files that you can restore with SQribe or another query tool.
