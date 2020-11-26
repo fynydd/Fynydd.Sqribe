@@ -5,7 +5,7 @@
 
 Backup and restore Microsoft SQL Server databases on Windows, macOS, and Linux.
 
-SQribe is a 64-bit .NET 5.0 command line (CLI) tool that allows users to connect to a Microsoft SQL Server 2008 or later instance and create backup scripts for use in cloning a database or easily versioning database changes in source control. Backup and restore operations are multi-threaded.
+SQribe is a 64-bit .NET 5.0 command line (CLI) tool that allows users to connect to a Microsoft SQL Server 2012 or later instance and create backup scripts for use in cloning a database or easily versioning database changes in source control. Backup and restore operations are multi-threaded.
 
 Visit the website at [https://sqribe.app](https://sqribe.app) for documentation, introductory videos, and more.
 
@@ -63,7 +63,7 @@ Schema collections in *Security/Schemas* are supported.
 
 ### Tables
 
-Table column types for SQL Server 2008 through 2019 are supported (including hierarchyid and geography). The following features are also supported:
+Table column types for SQL Server 2012 through 2019 are supported (including hierarchyid and geography). The following features are also supported:
 
 - Identities
 - Primary keys
@@ -103,7 +103,7 @@ The following are NOT supported:
 
 ### User-Defined Table Types (UDTT)
 
-User-defined tables in *Programmability/Types/User-Defined Table Types* are supported with column types for SQL Server 2008 through 2016 (including hierarchyid and geography). The following additional features are supported:
+User-defined tables in *Programmability/Types/User-Defined Table Types* are supported with column types for SQL Server 2012 through 2019 (including hierarchyid and geography). The following additional features are supported:
 
 - Identities
 - Primary keys
