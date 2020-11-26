@@ -45,7 +45,7 @@ The repository includes the .NET 5.0 project, which can be run from the command 
 > dotnet run backup-adventureworks
 ```
 
-The repository includes a Wix project that can be used to build a Windows installer, when the solution is built in *Release* mode. It also includes a macOS *Packages* project file for building and generating a macOS installer. Both create unsigned installers.
+The repository includes a Wix project that can be used to build a Windows installer, when the solution is built in *Release* mode. It also includes a macOS *Packages* project file for building and generating a macOS installer. Both create unsigned installers. By using the installers you can invoke the SQribe application by its name, *sqribe*.
 
 ## Database Object Support
 
