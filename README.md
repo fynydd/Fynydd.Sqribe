@@ -21,6 +21,32 @@ In addition to the command line argument method for invoking the application, de
 
 And best of all, SQribe can be run on Linux, macOS, and Windows.
 
+## How It Works
+
+SQribe can be run with a series of command line parameters:
+
+```
+> sqribe backup /data_source:"server=localhost;database=AdventureWorks2017;user id=aw2017user;password='abracadabra';" /objects:"all" /output_path:"~/Desktop/sqribe-backup"
+```
+
+...or with a single parameter that points to a JSON settings file (similar to the way Microsoft robocopy works):
+
+```
+> sqribe backup-adventureworks
+```
+
+SQribe will then backup or restore a SQL database to/from T-SQL script files for schema and data items. SQribe looks in a folder named "sqribe" within your user home folder for these JSON settings files.
+
+## Repository Contents
+
+The repository includes the .NET 5.0 project, which can be run from the command line:
+
+```
+> dotnet run backup-adventureworks
+```
+
+The repository includes a Wix project that can be used to build a Windows installer, when the solution is built in *Release* mode. It also includes a macOS *Packages* project file for building and generating a macOS installer. Both create unsigned installers.
+
 ## Database Object Support
 
 When scripting and restoring a database, the following describes which database objects and properties are supported.
