@@ -62,7 +62,7 @@ The SQribe solution consists of the following projects:
 
 ### macOS Installer
 
-The macOS *Packages* project can be used to build and generate an unsigned macOS installer.
+The macOS [Packages](http://s.sudre.free.fr/Software/Packages/about.html) project can be used to build and generate an unsigned macOS installer.
 
 ## Database Object Support
 
