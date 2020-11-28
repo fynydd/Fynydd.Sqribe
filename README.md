@@ -1,4 +1,3 @@
-
 <center><img src="https://sqribe.app/images/sqribe-advert.png" width="100%" /></center>
 
 # SQribe for Microsoft SQL Server
@@ -25,7 +24,7 @@ And best of all, SQribe can be run on Linux, macOS, and Windows.
 
 ## How It Works
 
-SQribe can be run with a series of command line parameters:
+Once you install the SQribe binary (see the *Releases* area of the repository or build your own), it can be run with a series of command line parameters using the *sqribe* command:
 
 ```
 > sqribe backup /data_source:"server=localhost;database=AdventureWorks2017;user id=aw2017user;password='abracadabra';" /objects:"all" /output_path:"~/Desktop/sqribe-backup"
@@ -39,15 +38,31 @@ SQribe can be run with a series of command line parameters:
 
 SQribe will then backup or restore a SQL database to/from T-SQL script files for schema and data items. SQribe looks in a folder named "sqribe" within your user home folder for these JSON settings files.
 
-## Repository Contents
-
-The repository includes the .NET 5.0 project, which can be run from the command line:
+You can also run SQribe directly from the repository folder with the *dotnet* command:
 
 ```
 > dotnet run backup-adventureworks
 ```
 
-The repository includes a Wix project that can be used to build a Windows installer, when the solution is built in *Release* mode. It also includes a macOS *Packages* project file for building and generating a macOS installer. Both create unsigned installers. By using the installers you can invoke the SQribe application by its name, *sqribe*.
+## Repository Contents
+
+The repository includes:
+
+1. This README file
+2. SQribe LICENSE
+3. SQribe Visual Studio 2019 solution
+4. SQribe .NET 5.0 project
+5. SQribe macOS installer
+6. SQribe Wix installer
+
+The SQribe solution consists of the following projects:
+
+1. SQribe .NET 5.0 project; the application code
+2. Wix installer; generates an unsigned Windows 10 x64 installer when the solution is built for *Release*
+
+### macOS Installer
+
+The macOS *Packages* project can be used to build and generate an unsigned macOS installer.
 
 ## Database Object Support
 
@@ -129,4 +144,3 @@ These are supported at the database level and for supported schema types (includ
 ### Triggers
 
 Database triggers in *Programmability/Database Triggers* and *Tables* are supported, including enabled/disabled properties.
-
