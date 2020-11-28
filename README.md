@@ -64,7 +64,7 @@ Once you have Wix Toolset installed, launch Visual Studio and open the SQribe so
 
 ### macOS Installer
 
-Before building a macOS installer, first run the publish script before building the installer:
+Before building a macOS installer, first run the publish script:
 
 ```
 > zsh publish-macos.sh
