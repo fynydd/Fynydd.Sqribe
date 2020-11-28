@@ -41,6 +41,7 @@ SQribe will then backup or restore a SQL database to/from T-SQL script files for
 You can also run SQribe directly from the repository folder with the *dotnet* command:
 
 ```
+> cd {SQribe Repo Root}/SQribe
 > dotnet run backup-adventureworks
 ```
 
@@ -67,6 +68,7 @@ Once you have Wix Toolset installed, launch Visual Studio and open the SQribe so
 Before building a macOS installer, first run the publish script:
 
 ```
+> cd {SQribe Repo Root}
 > zsh publish-macos.sh
 ```
 
