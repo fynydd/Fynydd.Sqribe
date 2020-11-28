@@ -1,0 +1,38 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28010.2041
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "sqribe", "SQribe\sqribe.csproj", "{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}"
+EndProject
+Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "sqribe.installer", "SQribe-Installer\sqribe.installer.wixproj", "{0455D625-DDF6-4055-A15D-AA0D63F40316}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Debug|x64.Build.0 = Debug|Any CPU
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Debug|x86.Build.0 = Debug|Any CPU
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Release|x64.ActiveCfg = Release|Any CPU
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Release|x64.Build.0 = Release|Any CPU
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Release|x86.ActiveCfg = Release|Any CPU
+		{EFA8F508-E334-4EBC-983C-3F1E1E553F3D}.Release|x86.Build.0 = Release|Any CPU
+		{0455D625-DDF6-4055-A15D-AA0D63F40316}.Debug|x64.ActiveCfg = Debug|x64
+		{0455D625-DDF6-4055-A15D-AA0D63F40316}.Debug|x64.Build.0 = Debug|x64
+		{0455D625-DDF6-4055-A15D-AA0D63F40316}.Debug|x86.ActiveCfg = Debug|x64
+		{0455D625-DDF6-4055-A15D-AA0D63F40316}.Release|x64.ActiveCfg = Release|x64
+		{0455D625-DDF6-4055-A15D-AA0D63F40316}.Release|x64.Build.0 = Release|x64
+		{0455D625-DDF6-4055-A15D-AA0D63F40316}.Release|x86.ActiveCfg = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EE75095A-D57C-462C-9CF8-EA6A6E2E60F9}
+	EndGlobalSection
+EndGlobal

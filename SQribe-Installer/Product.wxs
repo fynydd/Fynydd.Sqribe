@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product Id="*" 
+           Name="!(loc.ProductName)" 
+           Language="!(loc.Language)" 
+           Version="$(var.BuildVersion)" 
+           Manufacturer="!(loc.Company)" 
+           UpgradeCode="67635208-e7f2-4fac-8abd-4c79d8ae4af3">
+	
+    <Package 
+      InstallerVersion="200" 
+      Compressed="yes" 
+      InstallScope="perMachine" 
+      Platform="$(var.Platform)"
+      Manufacturer="!(loc.Company)"
+      Description="!(loc.Description)"
+      Keywords="!(loc.Keywords)"
+      Comments="!(loc.Comments)"
+      Languages="!(loc.Language)"
+      />
+
+    <!-- Use AllowSameVersionUpgrades="yes" to upgarde versions where the version change uses the fourth component (e.g. 1.0.0.X) -->
+		<MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeErrorMessage)" MigrateFeatures="yes" AllowSameVersionUpgrades="yes" />
+
+    <MediaTemplate 
+      EmbedCab="yes"
+      />
+
+    <Icon Id="icon.ico" SourceFile="$(var.sqribe.ProjectDir)\app.ico" />
+    <Property Id="APPPRODUCTICON">icon.ico</Property>
+    <Property Id="APPURLINFOABOUT">http://sqribe.app</Property>
+
+    <UIRef Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.ProjectDir)\Assets\License.rtf"/>
+    
+    <Feature Id="ProductFeature" Title="SQribe" Level="1">
+			<ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="PublishedComponents" />
+    </Feature>
+
+  </Product>
+
+</Wix>

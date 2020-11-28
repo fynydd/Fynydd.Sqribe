@@ -1,0 +1,21 @@
+<Project>
+    <PropertyGroup>
+        <Version>1.2.0.0</Version>
+        <Authors>Michael Argentini</Authors>
+        <Company>Fynydd LLC</Company>
+        <Product>SQribe</Product>
+        <PackageId>SQribe</PackageId>
+        <AssemblyVersion>1.2.0.0</AssemblyVersion>
+        <FileVersion>1.2.0.0</FileVersion>
+        <NeutralLanguage>en</NeutralLanguage>
+        <Description>SQribe is a C# console application for scripting SQL Server database backups and restoring them in separate steps.</Description>
+        <Copyright>Copyright 2018, Fynydd LLC</Copyright>
+        <PackageLicenseUrl></PackageLicenseUrl>
+        <PackageProjectUrl></PackageProjectUrl>
+        <PackageIconUrl></PackageIconUrl>
+        <RepositoryUrl></RepositoryUrl>
+        <RepositoryType></RepositoryType>
+        <PackageTags></PackageTags>
+        <PackageReleaseNotes></PackageReleaseNotes>    
+    </PropertyGroup>
+</Project>
