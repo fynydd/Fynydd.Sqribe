@@ -54,15 +54,23 @@ The repository includes:
 4. SQribe .NET 5.0 project
 5. SQribe macOS installer
 6. SQribe Wix installer
+7. Script files to build and publish SQribe
 
-The SQribe solution consists of the following projects:
+### Windows Installer
 
-1. SQribe .NET 5.0 project; the application code
-2. Wix installer; generates an unsigned Windows 10 x64 installer when the solution is built for *Release*
+You should install [Wix Toolset](https://wixtoolset.org/releases/) prior to building a SQribe installer.
+
+Once you have Wix Toolset installed, launch Visual Studio and open the SQribe solution file. When you build in *Release* mode the Wix installer will generate an unsigned installer for you in ```{SQribe Repo Root}/SQribe-Installer/Installs```.
 
 ### macOS Installer
 
-The macOS [Packages](http://s.sudre.free.fr/Software/Packages/about.html) project can be used to build and generate an unsigned macOS installer.
+Before building a macOS installer, first run the publish script before building the installer:
+
+```
+> zsh publish-macos.sh
+```
+
+Once published, open the [Packages](http://s.sudre.free.fr/Software/Packages/about.html) project to build and generate an unsigned macOS installer in the path ```{SQribe Repo Root}/SQribe-Mac-Installer/Build```.
 
 ## Database Object Support
 
