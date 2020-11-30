@@ -24,7 +24,7 @@ And best of all, SQribe can be run on Linux, macOS, and Windows.
 
 ### Overview Video
 
-<a href="https://youtu.be/ZOXsMhOkyCM" target="_blank"><img src="https://sqribe.app/images/sqribe-overview.jpg" width="50%"></a>
+[<img src="https://sqribe.app/images/sqribe-overview.jpg" width="50%">](https://youtu.be/ZOXsMhOkyCM)
 Click to watch the overview video
 
 ## How It Works
