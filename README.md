@@ -25,7 +25,7 @@ And best of all, SQribe can be run on Linux, macOS, and Windows.
 ### Overview Video
 
 [<img src="https://sqribe.app/images/sqribe-overview.jpg" width="50%">](https://youtu.be/ZOXsMhOkyCM)  
-Click to watch the overview video
+Click to watch the video
 
 ## How It Works
 
@@ -49,6 +49,21 @@ You can also run SQribe directly from the repository folder with the *dotnet* co
 > cd {SQribe Repo Root}/SQribe
 > dotnet run backup-adventureworks
 ```
+
+### Commands and Job Files Video
+
+[<img src="https://sqribe.app/images/sqribe-commands.jpg" width="50%">](https://youtu.be/WnykwkalJ2M)  
+Click to watch the video
+
+### Backup Job Video
+
+[<img src="https://sqribe.app/images/sqribe-backup.jpg" width="50%">](https://youtu.be/RX8z1pqYovo)  
+Click to watch the video
+
+### Restore Job Video
+
+[<img src="https://sqribe.app/images/sqribe-restore.jpg" width="50%">](https://youtu.be/HvL9Y1hY8HM)  
+Click to watch the video
 
 ## Repository Contents
 
