@@ -22,6 +22,11 @@ In addition to the command line argument method for invoking the application, de
 
 And best of all, SQribe can be run on Linux, macOS, and Windows.
 
+### Overview Video
+
+[<img src="https://sqribe.app/images/sqribe-overview.jpg" width="50%">](https://youtu.be/ZOXsMhOkyCM)  
+Click to watch the overview video
+
 ## How It Works
 
 Once you install the SQribe binary (see the *Releases* area of the repository or build your own), it can be run with a series of command line parameters using the *sqribe* command:
