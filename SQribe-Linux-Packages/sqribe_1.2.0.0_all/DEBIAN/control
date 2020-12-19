@@ -1,0 +1,11 @@
+Package: sqribe
+Version: 1.2.0.0
+Architecture: all
+Essential: no
+Priority: optional
+Section: utils
+Installed-Size: 80486
+Maintainer: magic@fynydd.com
+Homepage: https://sqribe.app
+Description: .NET 5.0 C# CLI for backup, restore, scripting, and versioning MS SQL Server (MSSQL) databases
+
