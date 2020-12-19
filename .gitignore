@@ -35,6 +35,6 @@ msbuild.wrn
 /out/Hash.txt
 
 # Binary installer packages
-SQribe-Linux-Packages/*.deb
+*.deb
 SQribe-Installer/Installs/*.msi
 SQribe-Mac-Installer/Build/*.pkg
