@@ -33,5 +33,8 @@ msbuild.wrn
 # Visual Studio 2015
 .vs/
 /out/Hash.txt
-*.msi
-*.pkg
+
+# Binary installer packages
+SQribe-Linux-Packages/*.deb
+SQribe-Installer/Installs/*.msi
+SQribe-Mac-Installer/Build/*.pkg
