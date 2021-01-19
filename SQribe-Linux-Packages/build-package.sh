@@ -1,1 +1,1 @@
-dpkg-deb --build sqribe_1.2.0.0_all
+dpkg-deb --build sqribe_1.2.1.0_all

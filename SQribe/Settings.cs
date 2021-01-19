@@ -648,7 +648,8 @@ namespace SQribe
 			this.MaxThreadCount = Environment.ProcessorCount;
             this.EraseDatabase = false;
 			this.DataSource = "";
-			this.OutputPath = ProcessFolderPath(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
+			//this.OutputPath = ProcessFolderPath(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
+			this.OutputPath = "";
             this.CompressData = false;
             this.ConfirmStart = true;
             this.ConsoleDarkMode = true;
