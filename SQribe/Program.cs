@@ -245,23 +245,26 @@ namespace SQribe
                         {
                             while (terminateKeyThread == false)
                             {
-                                if (Console.KeyAvailable)
-                                {
-                                    Console.Out.Flush();
-
-                                    var cki = Console.ReadKey(true);
-
-                                    if (cki.Key == ConsoleKey.Escape || cki.Key == ConsoleKey.C && (cki.Modifiers & ConsoleModifiers.Control) != 0)
+                                if (Console.IsInputRedirected == false)
+                                { 
+                                    if (Console.KeyAvailable)
                                     {
-                                        settings.Abort = true;
+                                        Console.Out.Flush();
+
+                                        var cki = Console.ReadKey(true);
+
+                                        if (cki.Key == ConsoleKey.Escape || cki.Key == ConsoleKey.C && (cki.Modifiers & ConsoleModifiers.Control) != 0)
+                                        {
+                                            settings.Abort = true;
+                                        }
+
+                                        Console.Out.Flush();
                                     }
 
-                                    Console.Out.Flush();
-                                }
-
-                                if (settings.Abort == true)
-                                {
-                                    Console.Out.Flush();
+                                    if (settings.Abort == true)
+                                    {
+                                        Console.Out.Flush();
+                                    }
                                 }
 
                                 System.Threading.Thread.Sleep(Constants.SleepNumber);
@@ -828,7 +831,7 @@ namespace SQribe
                 {
                     System.Threading.Thread.Sleep(Constants.SleepNumber);
 
-                    if (Console.KeyAvailable || render)
+                    if (Console.IsInputRedirected == false && (Console.KeyAvailable || render))
                     {
                         if (render == false)
                         {
