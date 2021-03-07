@@ -415,27 +415,35 @@ namespace SQribe
                         while (_outputLocations.TryGetValue(request.Token, out loc) == false)
                         { }
 
-                        // MACOS, LINUX
-                        if (_useAbsoluteLinePos == false)
+                        if (Console.IsInputRedirected == false)
                         {
-                            if (loc.Top > -1)
+                            // MACOS, LINUX
+                            if (_useAbsoluteLinePos == false)
                             {
-                                Console.SetCursorPosition(loc.Left, loc.Top - (loc.WindowHeight - Console.WindowHeight));
+                                if (loc.Top > -1)
+                                {
+                                    Console.SetCursorPosition(loc.Left, loc.Top - (loc.WindowHeight - Console.WindowHeight));
+                                }
+
+                                else
+                                {
+                                    _skip = true;
+                                }
                             }
 
+                            // WINDOWS
                             else
                             {
-                                _skip = true;
+                                Console.SetCursorPosition(loc.Left, loc.Top);
                             }
+
+                            _lastWidth = loc.Width;
                         }
 
-                        // WINDOWS
                         else
                         {
-                            Console.SetCursorPosition(loc.Left, loc.Top);
+                            _skip = true;
                         }
-
-                        _lastWidth = loc.Width;
 
                         while (_outputLocations.TryRemove(request.Token, out loc) == false)
                         { }
@@ -443,16 +451,19 @@ namespace SQribe
 
                     else
                     {
-                        // MACOS, LINUX
-                        if (_useAbsoluteLinePos == false)
+                        if (Console.IsInputRedirected == false)
                         {
-                            Console.SetCursorPosition(0, _newTop - (_newTopWindowHeight - Console.WindowHeight));
-                        }
+                            // MACOS, LINUX
+                            if (_useAbsoluteLinePos == false)
+                            {
+                                Console.SetCursorPosition(0, _newTop - (_newTopWindowHeight - Console.WindowHeight));
+                            }
 
-                        // WINDOWS
-                        else
-                        {
-                            Console.SetCursorPosition(0, _newTop);
+                            // WINDOWS
+                            else
+                            {
+                                Console.SetCursorPosition(0, _newTop);
+                            }
                         }
                     }
 
@@ -482,10 +493,13 @@ namespace SQribe
 
                         if (_lastWidth > 0)
                         {
-                            var left = Console.CursorLeft - _lastWidth;
+                            if (Console.IsInputRedirected == false)
+                            {
+                                var left = Console.CursorLeft - _lastWidth;
 
-                            Console.SetCursorPosition(left, Console.CursorTop);
-                            _lastWidth = 0;
+                                Console.SetCursorPosition(left, Console.CursorTop);
+                                _lastWidth = 0;
+                            }
                         }
 
                         if (request.AppendLineBreak == true)
@@ -572,7 +586,11 @@ namespace SQribe
                             }
 
                             Console.Out.WriteLineAsync(consoleText + " ".Repeat(Console.WindowWidth - left - 1));
-                            Console.SetCursorPosition(left, top);
+
+                            if (Console.IsInputRedirected == false)
+                            {
+                                Console.SetCursorPosition(left, top);
+                            }
 
                             OutputLocation location = new OutputLocation(Console.CursorTop, Console.CursorLeft, _lastWidth);
 
