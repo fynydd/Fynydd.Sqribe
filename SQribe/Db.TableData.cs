@@ -500,7 +500,7 @@ namespace SQribe
                                                 {
                                                     var st = reader[0] + Constants.LineFeed;
 
-                                                    scrSql.Append(st);
+                                                    scrSql.Append(st.Replace("CONVERT(varbinary(max),''", "CONVERT(varbinary(max),'0x'"));
 
                                                     totalProcessed++;
 
