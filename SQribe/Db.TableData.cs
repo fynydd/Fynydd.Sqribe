@@ -1368,7 +1368,7 @@ namespace SQribe
 
                                                     helpers.ShowPercentageComplete(token, totalBytes, currentBytes, startDate, ref lastTimeUpdate, prefix + "Inserting ");
 
-                                                    var result = helpers.OpenExec(cn, job, token);
+                                                    var result = helpers.OpenExec(cn, job.Replace("CONVERT(varbinary(max),''", "CONVERT(varbinary(max),'0x'"), token);
                                                 }
                                             }
 
