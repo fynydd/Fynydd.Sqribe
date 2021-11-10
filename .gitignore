@@ -39,3 +39,4 @@ msbuild.wrn
 SQribe-Installer/Installs/*.msi
 SQribe-Mac-Installer/Build/*.pkg
 /SQribe/.idea
+.idea
