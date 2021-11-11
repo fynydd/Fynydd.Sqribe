@@ -943,7 +943,7 @@ namespace SQribe
                 var token = output.GetNewToken();
 
                 output.WriteLine("", token);
-                output.WriteLine("SQRIBE for SQL Server " + settings.Version + " for " + Identify.GetOSPlatformName() + " x64 (CLR " + Identify.GetRuntimeVersion() + ")", token);
+                output.WriteLine("SQRIBE for SQL Server " + settings.Version + " for " + Identify.GetOSPlatformName() + " " + Identify.GetPlatformArchitecture() + " (CLR " + Identify.GetRuntimeVersion() + ")", token);
                 output.WriteLine("", token);
                 output.WriteLine("For more info, run: sqribe help", token);
                 output.WriteLine("", token);

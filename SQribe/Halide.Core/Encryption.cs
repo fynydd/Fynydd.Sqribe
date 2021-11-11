@@ -31,10 +31,7 @@ namespace Fynydd.Halide
         {
             var byteArray = new byte[(int)Math.Ceiling(hexCharacters / 2.0)];
 
-            using (var rng = new RNGCryptoServiceProvider())
-            {
-                rng.GetBytes(byteArray);
-            }
+            RandomNumberGenerator.Fill(byteArray);
 
             return String.Concat(Array.ConvertAll(byteArray, x => x.ToString("X2")));
         }

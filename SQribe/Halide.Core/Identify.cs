@@ -33,9 +33,9 @@ namespace Fynydd.Halide
 
             // Check if it's Linux 
             bool isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux); 
-            osPlatform = isLinux ? OSPlatform.Linux : osPlatform; 
+            osPlatform = isLinux ? OSPlatform.Linux : osPlatform;
 
-            return osPlatform; 
+			return osPlatform; 
         } 
 
         /// <summary>
@@ -59,11 +59,20 @@ namespace Fynydd.Halide
             return result;
         }
 
-        /// <summary>
-        /// Get the .NET Core runtime version (e.g. "2.2").
-        /// </summary> 
-        /// <returns>String with the .NET Core version number</returns> 
-        public static string GetFrameworkVersion()
+		/// <summary>
+		/// Get platform architecture (e.g. x64).
+		/// </summary> 
+		/// <returns>OSPlatform object</returns> 
+		public static string GetPlatformArchitecture()
+		{
+			return RuntimeInformation.ProcessArchitecture.ToString();
+		}
+
+		/// <summary>
+		/// Get the .NET Core runtime version (e.g. "2.2").
+		/// </summary> 
+		/// <returns>String with the .NET Core version number</returns> 
+		public static string GetFrameworkVersion()
         {
             var result = Assembly
                 .GetEntryAssembly()?

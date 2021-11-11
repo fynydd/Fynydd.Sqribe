@@ -1614,7 +1614,7 @@ namespace SQribe
 		/// <returns>Application folder path</returns>
         public string GetAppPath()
         {
-            var path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            var path = AppContext.BaseDirectory;
             var result = ProcessFolderPath(path);
             var filePath = result + "HELP.txt";
 
