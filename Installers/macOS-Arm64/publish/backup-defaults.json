@@ -1,0 +1,13 @@
+{
+    "beep_on_completion": true,
+    "chunk_data": false,
+    "chunk_size_mb": 10,
+    "compress_data": false,
+    "confirm_start": true,
+    "console_dark_mode": true,
+    "data_blacklist": "",
+    "objects": "all",
+    "output_path": "~/Desktop/sqribe-backup",
+    "suppress_start_warnings": false,
+    "turbo_mode":  false
+}
