@@ -10,6 +10,10 @@ DECLARE @ParentTableSchema varchar(4000)
 DECLARE @ReferencedTableSchema varchar(4000)
 DECLARE @TSQLCreationFK varchar(max)
 
+DECLARE @ActionDelete varchar(4000)
+DECLARE @ActionUpdate varchar(4000)
+DECLARE @Action varchar(4000)
+
 DECLARE CursorFK CURSOR FOR SELECT object_id
 FROM sys.foreign_keys
 OPEN CursorFK
@@ -31,7 +35,7 @@ BEGIN
         INNER JOIN sys.tables t2 ON t2.object_id=fkc.referenced_object_id
     WHERE fk.object_id=@ForeignKeyID AND schema_name(t1.schema_id) <> 'sys'
     OPEN CursorFKDetails
-    FETCH NEXT FROM CursorFKDetails INTO  @ForeignKeyName, @ParentTableSchema, @ParentTableName, @ParentColumn, @ReferencedTableSchema, @ReferencedTable, @ReferencedColumn
+    FETCH NEXT FROM CursorFKDetails INTO @ForeignKeyName, @ParentTableSchema, @ParentTableName, @ParentColumn, @ReferencedTableSchema, @ReferencedTable, @ReferencedColumn
     WHILE (@@FETCH_STATUS=0)
  BEGIN
         SET @StrParentColumn=@StrParentColumn + ', ' + quotename(@ParentColumn)
@@ -42,10 +46,15 @@ BEGIN
     CLOSE CursorFKDetails
     DEALLOCATE CursorFKDetails
 
+    --SELECT name,delete_referential_action,delete_referential_action_desc,update_referential_action,update_referential_action_desc FROM sys.foreign_keys WHERE [name] = @ForeignKeyName
+    SET @ActionDelete = (SELECT TOP 1 delete_referential_action_desc FROM sys.foreign_keys WHERE [name] = @ForeignKeyName)
+    SET @ActionUpdate = (SELECT TOP 1 update_referential_action_desc FROM sys.foreign_keys WHERE [name] = @ForeignKeyName)
+    SET @Action = (CASE WHEN @ActionUpdate <> 'NO_ACTION' THEN 'ON UPDATE ' + REPLACE(@ActionUpdate, '_', ' ') ELSE (CASE WHEN @ActionDelete <> 'NO_ACTION' THEN 'ON DELETE ' + REPLACE(@ActionDelete, '_', ' ') ELSE '' END) END) 
+
     SET @StrParentColumn=substring(@StrParentColumn,2,len(@StrParentColumn)-1)
     SET @StrReferencedColumn=substring(@StrReferencedColumn,2,len(@StrReferencedColumn)-1)
-    SET @TSQLCreationFK = CHAR(13) + CHAR(10) + '-- SQRIBE/OBJ' + CHAR(13) + CHAR(10) + 'ALTER TABLE '+quotename(@ParentTableSchema)+'.'+quotename(@ParentTableName)+' WITH NOCHECK ADD CONSTRAINT '+quotename(@ForeignKeyName)
- + ' FOREIGN KEY('+ltrim(@StrParentColumn)+') '+ CHAR(13) + CHAR(10) +'REFERENCES '+quotename(@ReferencedTableSchema)+'.'+quotename(@ReferencedTable)+' ('+ltrim(@StrReferencedColumn)+') ' + CHAR(13) + CHAR(10) + 'GO -- SQRIBE/GO' + CHAR(13) + CHAR(10)
+    SET @TSQLCreationFK = CHAR(13) + CHAR(10) + '-- SQRIBE/OBJ' + CHAR(13) + CHAR(10) + 'ALTER TABLE '+quotename(@ParentTableSchema)+'.'+quotename(@ParentTableName)+' WITH CHECK ADD CONSTRAINT '+quotename(@ForeignKeyName)
+ + ' FOREIGN KEY('+ltrim(@StrParentColumn)+') '+ CHAR(13) + CHAR(10) +'REFERENCES '+quotename(@ReferencedTableSchema)+'.'+quotename(@ReferencedTable)+' ('+ltrim(@StrReferencedColumn)+') ' + @Action + CHAR(13) + CHAR(10) + 'GO -- SQRIBE/GO' + CHAR(13) + CHAR(10)
 
     SELECT @TSQLCreationFK
 
