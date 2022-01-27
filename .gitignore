@@ -36,8 +36,7 @@ msbuild.wrn
 
 # Binary installer packages
 *.deb
-SQribe-Installer/Installs/*.msi
-SQribe-Mac-Installer/Build/*.pkg
+/Installers
 /SQribe/.idea
 .idea
 publish/
