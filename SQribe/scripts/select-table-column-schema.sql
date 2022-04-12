@@ -14,6 +14,7 @@ SELECT
     isc.COLUMN_DEFAULT,
     isc.IS_NULLABLE,
 	columns.is_computed AS [IS_COMPUTED],
+	cc.is_persisted AS [IS_PERSISTED],
 	cc.definition AS [COMPUTED_VALUE],
     columns.is_rowguidcol AS [IS_ROWGUIDCOL],
     isc.DATA_TYPE,

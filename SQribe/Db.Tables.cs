@@ -200,7 +200,7 @@ namespace SQribe
                                                             var dataType = columns["DATA_TYPE"];
                                                             var colSize = "";
 
-                                                            if (columns.GetBoolean("IS_COMPUTED") == true && columns["COMPUTED_VALUE"] != "")
+                                                            if (columns.GetBoolean("IS_COMPUTED") && columns["COMPUTED_VALUE"] != "")
                                                             {
                                                                 needsAlter = true;
 
@@ -210,7 +210,7 @@ namespace SQribe
 
                                                                 // Generate real computed column for later drop and create
                                                                 generatedComputedCol = generatedComputedCol.Left(generatedComputedCol.IndexOf("[COLUMN_NAME]"));
-                                                                generatedComputedCol += "[" + columns["COLUMN_NAME"] + "] AS " + columns["COMPUTED_VALUE"] + "," + Constants.LineFeed;
+                                                                generatedComputedCol += "[" + columns["COLUMN_NAME"] + "] AS " + columns["COMPUTED_VALUE"] + (columns.GetBoolean("IS_PERSISTED") ? " PERSISTED" : "") + "," + Constants.LineFeed;
 
                                                                 if (fieldCounter++ >= rowCount)
                                                                 {
