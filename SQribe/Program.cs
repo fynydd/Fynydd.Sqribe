@@ -1308,12 +1308,12 @@ namespace SQribe
                     
                     if (settings.BackupSqlMinorVersion > -1)
                     {
-                        output.WriteLine($" {Constants.GetIndentationArrow()}SQL Server ({settings.BackupSqlMajorVersion}.{settings.BackupSqlMinorVersion}.{settings.BackupSqlBuildVersion})", token);
+                        output.WriteLine($" {Constants.GetIndentationArrow()}{settings.BackupSqlEdition} ({settings.BackupSqlMajorVersion}.{settings.BackupSqlMinorVersion}.{settings.BackupSqlBuildVersion})", token);
                     }
 
                     else
                     {
-                        output.WriteLine($" {Constants.GetIndentationArrow()}SQL Server ({settings.BackupSqlMajorVersion})", token);
+                        output.WriteLine($" {Constants.GetIndentationArrow()}{settings.BackupSqlEdition} ({settings.BackupSqlMajorVersion})", token);
                     }
                 }
 

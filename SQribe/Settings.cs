@@ -1107,6 +1107,16 @@ namespace SQribe
                             this.BackupSqlEdition = $"SQL Server {Constants.SqlServerVersions.FirstOrDefault(x => x.Value == this.BackupSqlMajorVersion).Key}";
                         }
                     }
+
+                    if (Constants.SqlServerVersions.ContainsValue(this.BackupSqlMajorVersion) && jo.TryGetValue("SqlEdition", out jt) == true)
+                    {
+                        var sqlEdition = jt.Value<string>();
+
+                        if (string.IsNullOrEmpty(sqlEdition) == false)
+                        {
+                            BackupSqlEdition = sqlEdition;
+                        }
+                    }
                 }
 
                 else
@@ -1184,6 +1194,7 @@ namespace SQribe
 $@"{{
     ""Hash"": ""{Hash}"",
     ""Timestamp"": ""{BackupTimestamp}"",
+    ""SqlEdition"": ""{BackupSqlEdition}"",
     ""SqlMajorVersion"": {BackupSqlMajorVersion},
     ""SqlVersion"": ""{BackupSqlMajorVersion}.{BackupSqlMinorVersion}.{BackupSqlBuildVersion}""
 }}
