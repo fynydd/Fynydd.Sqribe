@@ -18,13 +18,14 @@ namespace SQribe
 
         #region SQL Server Support
 
-        public static Dictionary<string, int> SqlServerVersions = new Dictionary<string, int>() {
+        public static Dictionary<string, int> SqlServerVersions = new () {
 
             { "2012", 11 },
             { "2014", 12 },
             { "2016", 13 },
             { "2017", 14 },
-            { "2019", 15 }
+            { "2019", 15 },
+            { "2022", 16 }
         };
 
         #endregion

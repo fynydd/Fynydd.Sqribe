@@ -60,6 +60,8 @@ namespace SQribe
 		int ChunkSizeMb { get; set; }
 		int CurrentSqlMajorVersion { get; set; }
         int BackupSqlMajorVersion { get; set; }
+        int BackupSqlMinorVersion { get; set; }
+        int BackupSqlBuildVersion { get; set; }
 		int MaxThreadCount { get; set; }
 
 		Constants.OperationModes Mode { get; set; }
@@ -392,6 +394,8 @@ namespace SQribe
         public Constants.OperationModes Mode { get; set; }
 
         public int BackupSqlMajorVersion { get; set; }
+        public int BackupSqlMinorVersion { get; set; }
+        public int BackupSqlBuildVersion { get; set; }
 		public int ChunkSizeMb { get; set; }
   		public int CurrentSqlMajorVersion { get; set; }
 		public int MaxThreadCount { get; set; }
@@ -1052,7 +1056,9 @@ namespace SQribe
 
                 this.Hash = "";
                 this.BackupTimestamp = "unknown date";
-                this.BackupSqlMajorVersion = 0;
+                this.BackupSqlMajorVersion = -1;
+                this.BackupSqlMinorVersion = -1;
+                this.BackupSqlBuildVersion = -1;
                 this.BackupSqlEdition = "SQL Server";
 
                 if (File.Exists(filePath))
@@ -1072,13 +1078,33 @@ namespace SQribe
                         this.BackupTimestamp = jt.Value<string>();
                     }
 
-                    if (jo.TryGetValue("SqlMajorVersion", out jt) == true)
+                    if (jo.TryGetValue("SqlVersion", out jt) == true)
+                    {
+                        var sqlVersion = jt.Value<string>();
+
+                        if (int.TryParse((sqlVersion ?? string.Empty).Split('.')[0], out var majorVersion))
+                        {
+                            _ = int.TryParse((sqlVersion ?? string.Empty).Split('.')[1], out var minorVersion);
+                            _ = int.TryParse((sqlVersion ?? string.Empty).Split('.')[2], out var buildVersion);
+
+                            BackupSqlMajorVersion = majorVersion;
+                            BackupSqlMinorVersion = minorVersion;
+                            BackupSqlBuildVersion = buildVersion;
+                        }
+
+                        if (Constants.SqlServerVersions.ContainsValue(this.BackupSqlMajorVersion))
+                        {
+                            this.BackupSqlEdition = $"SQL Server {Constants.SqlServerVersions.FirstOrDefault(x => x.Value == this.BackupSqlMajorVersion).Key}";
+                        }
+                    }
+                    
+                    else if (jo.TryGetValue("SqlMajorVersion", out jt) == true)
                     {
                         this.BackupSqlMajorVersion = jt.Value<int>();
 
                         if (Constants.SqlServerVersions.ContainsValue(this.BackupSqlMajorVersion))
                         {
-                            this.BackupSqlEdition = "SQL Server " + Constants.SqlServerVersions.FirstOrDefault(x => x.Value == this.BackupSqlMajorVersion).Key;
+                            this.BackupSqlEdition = $"SQL Server {Constants.SqlServerVersions.FirstOrDefault(x => x.Value == this.BackupSqlMajorVersion).Key}";
                         }
                     }
                 }
@@ -1114,6 +1140,8 @@ namespace SQribe
                 this.BackupTimestamp = DateTime.UtcNow.DateFormat(DateFormats.Utc);
                 this.BackupSqlEdition = "";
                 this.BackupSqlMajorVersion = 0;
+                this.BackupSqlMinorVersion = 0;
+                this.BackupSqlBuildVersion = 0;
 
                 using (var cn = new SqlConnection())
                 {
@@ -1138,23 +1166,27 @@ namespace SQribe
 
                     if (this.Abort == false && task2.IsFaulted == false && timer.GetSeconds<int>() <= timeout)
                     {
-                        int majorVersion = 0;
-                        
-                        if (int.TryParse(cn.ServerVersion.Split('.')[0], out majorVersion) == true)
+                        if (int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[0], out var majorVersion))
                         {
-                            this.BackupSqlMajorVersion = majorVersion;
+                            _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[1], out var minorVersion);
+                            _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[2], out var buildVersion);
 
-                            if (Constants.SqlServerVersions.ContainsValue(this.BackupSqlMajorVersion))
+                            BackupSqlMajorVersion = majorVersion;
+                            BackupSqlMinorVersion = minorVersion;
+                            BackupSqlBuildVersion = buildVersion;
+                            
+                            if (Constants.SqlServerVersions.ContainsValue(BackupSqlMajorVersion))
                             {
-                                this.BackupSqlEdition = "SQL Server " + Constants.SqlServerVersions.FirstOrDefault(x => x.Value == this.BackupSqlMajorVersion).Key;
+                                BackupSqlEdition = "SQL Server " + Constants.SqlServerVersions.FirstOrDefault(x => x.Value == BackupSqlMajorVersion).Key;
                             }
 
                             var json = 
-@"{
-    ""Hash"": """ + this.Hash + @""",
-    ""Timestamp"": """ + this.BackupTimestamp + @""",
-    ""SqlMajorVersion"": " + this.BackupSqlMajorVersion + @"
-}
+$@"{{
+    ""Hash"": ""{Hash}"",
+    ""Timestamp"": ""{BackupTimestamp}"",
+    ""SqlMajorVersion"": {BackupSqlMajorVersion},
+    ""SqlVersion"": ""{BackupSqlMajorVersion}.{BackupSqlMinorVersion}.{BackupSqlBuildVersion}""
+}}
 ";
                             File.AppendAllText(filePath, json, Encoding.UTF8);
                         }

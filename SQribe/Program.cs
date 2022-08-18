@@ -508,15 +508,21 @@ namespace SQribe
 
                                 var sqlServerVersion = "";
                                 var supported = false;
-                                int majorVersion = 0;
 
+                                var majorVersion = 0;
+                                var minorVersion = 0;
+                                var buildVersion = 0;
+                                
                                 settings.CurrentSqlMajorVersion = 0;
                                 
-                                if (int.TryParse(cn.ServerVersion.Split('.')[0], out majorVersion) == true)
+                                if (int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[0], out majorVersion))
                                 {
+                                    _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[1], out minorVersion);
+                                    _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[2], out buildVersion);
+
                                     if (Constants.SqlServerVersions.ContainsValue(majorVersion))
                                     {
-                                        sqlServerVersion = "SQL Server " + Constants.SqlServerVersions.FirstOrDefault(x => x.Value == majorVersion).Key + " (" + majorVersion + ")";
+                                        sqlServerVersion = $"SQL Server {Constants.SqlServerVersions.FirstOrDefault(x => x.Value == majorVersion).Key} ({majorVersion}.{minorVersion}.{buildVersion})";
                                         supported = true;
 
                                         output.WriteLine(sqlServerVersion, token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
@@ -1299,14 +1305,15 @@ namespace SQribe
                 if (settings.BackupSqlMajorVersion > 0)
                 {
                     output.Write("             ", token);
-                    if (settings.BackupSqlMajorVersion > 0)
+                    
+                    if (settings.BackupSqlMinorVersion > -1)
                     {
-                        output.WriteLine(" " + Constants.GetIndentationArrow() + settings.BackupSqlEdition + " (" + settings.BackupSqlMajorVersion + ")", token);
+                        output.WriteLine($" {Constants.GetIndentationArrow()}SQL Server ({settings.BackupSqlMajorVersion}.{settings.BackupSqlMinorVersion}.{settings.BackupSqlBuildVersion})", token);
                     }
 
                     else
                     {
-                        output.WriteLine(" " + Constants.GetIndentationArrow() + "SQL Server (" + settings.BackupSqlMajorVersion + ")", token);
+                        output.WriteLine($" {Constants.GetIndentationArrow()}SQL Server ({settings.BackupSqlMajorVersion})", token);
                     }
                 }
 
