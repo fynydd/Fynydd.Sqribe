@@ -66,8 +66,8 @@ Require a keypress to begin a backup (default: true).
 /console_dark_mode:
 When enabled output is light in color; dark when disabled (default: true).
 
-/data_blacklist:
-Specify schema and table names in a comma-separated list to skip generating their data insert statements, for example "dbo.DatabaseLog,dbo.ErrorLog". Blacklisted items can end with a wildcard asterisk (*), for example "dbo.Error*".
+/data_exclusions:
+Specify schema and table names in a comma-separated list to skip generating their data insert statements, for example "dbo.DatabaseLog,dbo.ErrorLog". Excluded items can end with a wildcard asterisk (*), for example "dbo.Error*".
 
 /data_source:
 Standard SQL Server connection string in quotation marks.
@@ -222,7 +222,7 @@ Backup file format:
     "compress_data": false,
     "confirm_start": true,
     "console_dark_mode": true,
-    "data_blacklist": "",
+    "data_exclusions": "",
     "data_source": "server=localhost; database=Adv... etc.",
     "objects": "all",
     "output_path": "~Desktop/out",

@@ -2,12 +2,9 @@
 // Licensed under the GNU GPLv3 License.
 
 using System;
-using System.Diagnostics;
-using System.Web;
-using Fynydd.Halide.Constants;
 
-namespace Fynydd.Halide
-{
+namespace SQribe.Halide.Core;
+
 	/// <summary>
 	/// The TemporalHelpers class contains methods and properties for manipulating, 
 	/// evaluating, or displaying dates and times.
@@ -31,7 +28,7 @@ namespace Fynydd.Halide
 		/// <returns>Age in years as an integer</returns>
 		public static int CalculateAge(this DateTime dob, int utcOffset)
 		{
-			return Convert.ToInt32(Math.Truncate(DateDiff<double>(dob, DateTime.UtcNow, DateDiffComparisonType.Age, utcOffset, 0)));
+			return Convert.ToInt32(Math.Truncate(DateDiff<double>(dob, DateTime.UtcNow, DateDiffComparisonType.Age, utcOffset)));
 		}
 
 		/// <summary>
@@ -63,7 +60,7 @@ namespace Fynydd.Halide
 		/// <param name="endDate">Last date for comparison. If later than startDate, a positive result is returned.</param>
 		/// <param name="endDateOffset">UTC offset value for endDate datetime.</param>
 		/// <returns></returns>
-		public static T DateDiff<T>(this DateTime startDate, DateTime endDate, DateDiffComparisonType howtocompare, int startDateOffset = 0, int endDateOffset = 0)
+		public static T DateDiff<T>(this DateTime startDate, DateTime endDate, DateDiffComparisonType howtocompare, int startDateOffset, int endDateOffset = 0)
 		{
 			double diff = 0;
 
@@ -72,78 +69,46 @@ namespace Fynydd.Halide
 
 			try
 			{
-				#region Non-Fractional conversion options
-
+				// ReSharper disable once ConvertIfStatementToSwitchStatement
 				if (howtocompare == DateDiffComparisonType.DaysWhole)
 				{
-					DateTime sd = new DateTime(startDate.Year, startDate.Month, startDate.Day, 0, 0, 0);
-					DateTime ed = new DateTime(endDate.Year, endDate.Month, endDate.Day, 0, 0, 0);
-
-					System.TimeSpan TS = new System.TimeSpan(ed.Ticks - sd.Ticks);
+					var sd = new DateTime(startDate.Year, startDate.Month, startDate.Day, 0, 0, 0);
+					var ed = new DateTime(endDate.Year, endDate.Month, endDate.Day, 0, 0, 0);
+					var TS = new TimeSpan(ed.Ticks - sd.Ticks);
 
 					diff = Convert.ToDouble(TS.TotalDays);
 				}
-
 				else if (howtocompare == DateDiffComparisonType.Age)
 				{
-					int age = endDate.Year - startDate.Year;    //people perceive their age in years
+					var age = endDate.Year - startDate.Year; //people perceive their age in years
 
-					if (endDate.Month < startDate.Month || ((endDate.Month == startDate.Month) && (endDate.Day < startDate.Day)))
+					if (endDate.Month < startDate.Month ||
+					    ((endDate.Month == startDate.Month) && (endDate.Day < startDate.Day)))
 					{
-						age--;  //birthday in current year not yet reached, so we are 1 year younger
-								//note that this structure explicitly places March 1st as the non-leapyear birthday for those born on Feb 29th.
+						age--; //birthday in current year not yet reached, so we are 1 year younger
+						//note that this structure explicitly places March 1st as the non-leapyear birthday for those born on Feb 29th.
 					}
 
 					diff = Convert.ToDouble(age);
 				}
-
-				#endregion
-
 				else
 				{
-					System.TimeSpan TS = new System.TimeSpan(endDate.Ticks - startDate.Ticks);
+					var TS = new TimeSpan(endDate.Ticks - startDate.Ticks);
 
-					#region Fractional conversion options
-
-					switch (howtocompare)
+					diff = howtocompare switch
 					{
-						case DateDiffComparisonType.Minutes:
-							diff = Convert.ToDouble(TS.TotalMinutes);
-							break;
-
-						case DateDiffComparisonType.Hours:
-							diff = Convert.ToDouble(TS.TotalHours);
-							break;
-
-						case DateDiffComparisonType.Seconds:
-							diff = Convert.ToDouble(TS.TotalSeconds);
-							break;
-
-						case DateDiffComparisonType.Ticks:
-							diff = Convert.ToDouble(TS.Ticks);
-							break;
-
-						case DateDiffComparisonType.Milliseconds:
-							diff = Convert.ToDouble(TS.TotalMilliseconds);
-							break;
-
-						case DateDiffComparisonType.Months:
-							diff = Convert.ToDouble(TS.TotalDays / 30.438);
-							break;
-
-						case DateDiffComparisonType.Years:
-							diff = Convert.ToDouble(TS.TotalDays / 365.255);
-							break;
-
-						case DateDiffComparisonType.Quarters: //TO DO: not use a calculation, but instead use Jan 1, Apr 1, July 1, Oct 1 to determine current quarter of this year (and how many quarters of the initial year) and add the remaining years as 4 quarters each
-							diff = Convert.ToDouble((TS.TotalDays / 365.255) / 4);
-							break;
-
-						default:
-							diff = Convert.ToDouble(TS.TotalDays); break;
-					}
-
-					#endregion
+						DateDiffComparisonType.Minutes => Convert.ToDouble(TS.TotalMinutes),
+						DateDiffComparisonType.Hours => Convert.ToDouble(TS.TotalHours),
+						DateDiffComparisonType.Seconds => Convert.ToDouble(TS.TotalSeconds),
+						DateDiffComparisonType.Ticks => Convert.ToDouble(TS.Ticks),
+						DateDiffComparisonType.Milliseconds => Convert.ToDouble(TS.TotalMilliseconds),
+						DateDiffComparisonType.Months => Convert.ToDouble(TS.TotalDays / 30.438),
+						DateDiffComparisonType.Years => Convert.ToDouble(TS.TotalDays / 365.255),
+						DateDiffComparisonType.Quarters =>
+							//TO DO: not use a calculation, but instead use Jan 1, Apr 1, July 1, Oct 1 to determine current quarter of this year (and how many quarters of the initial year) and add the remaining years as 4 quarters each
+							Convert.ToDouble((TS.TotalDays / 365.255) / 4),
+						_ => Convert.ToDouble(TS.TotalDays)
+					};
 				}
 			}
 
@@ -163,7 +128,7 @@ namespace Fynydd.Halide
 		/// <returns>String with the date formatted as requested.</returns>
 		public static string DateFormat(this DateTime date, DateFormats format)
 		{
-			string thedate = string.Empty;
+			var thedate = string.Empty;
 
 			try
 			{
@@ -233,23 +198,18 @@ namespace Fynydd.Halide
 
 					case DateFormats.Friendly:
 
-						double days = Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Days)));
-						bool future = false;
-
-						if (DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes) <= 0)
-						{
-							future = true;
-						}
+						var days = Convert.ToDouble(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Days)));
+						var future = DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes) <= 0;
 
 						thedate = "today";
 
-						if (Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours)) < 13 && Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours)) >= 0)
+						if (Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours)) < 13 && Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours)) >= 0)
 						{
-							if (Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes)) < 60 && Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes)) > 0)
+							if (Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes)) < 60 && Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes)) > 0)
 							{
-								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes))).ToString() + " minute";
+								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes))) + " minute";
 
-								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes))) != 1)
+								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes))) != 1)
 								{
 									thedate += "s";
 								}
@@ -259,9 +219,9 @@ namespace Fynydd.Halide
 
 							else
 							{
-								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours))).ToString() + " hour";
+								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours))) + " hour";
 
-								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours))) != 1)
+								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours))) != 1)
 								{
 									thedate += "s";
 								}
@@ -272,18 +232,19 @@ namespace Fynydd.Halide
 
 						else
 						{
-							if (days < 7 && days > 0)
+							// ReSharper disable once ConvertIfStatementToSwitchStatement
+							if (days is < 7 and > 0)
 							{
-								if (days == 1)
+								if (days.Equals(1))
 								{
 									thedate = (future ? "tomorrow" : "yesterday");
 								}
 
 								else
 								{
-									thedate = days.ToString() + " day";
+									thedate = days + " day";
 
-									if (days != 1)
+									if (days.Equals(1) == false)
 									{
 										thedate += "s";
 									}
@@ -294,7 +255,7 @@ namespace Fynydd.Halide
 
 							else
 							{
-								if (days == 7)
+								if (days.Equals(7))
 								{
 									thedate = (future ? "a week from now" : "a week ago");
 								}
@@ -310,24 +271,17 @@ namespace Fynydd.Halide
 
 					case DateFormats.Abstract:
 
-						days = Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Days));
-
-						future = false;
-
-						if (DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes) <= 0)
-						{
-							future = true;
-						}
-
+						days = Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Days));
+						future = DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes) <= 0;
 						thedate = "today";
 
-						if (Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours)) < 24 && Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours)) >= 0)
+						if (Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours)) < 24 && Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours)) >= 0)
 						{
-							if (Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes)) < 60 && Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes)) > 0)
+							if (Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes)) < 60 && Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes)) > 0)
 							{
-								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes))).ToString() + " minute";
+								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes))) + " minute";
 
-								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Minutes))) != 1)
+								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Minutes))) != 1)
 								{
 									thedate += "s";
 								}
@@ -337,9 +291,9 @@ namespace Fynydd.Halide
 
 							else
 							{
-								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours))).ToString() + " hour";
+								thedate = Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours))) + " hour";
 
-								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Hours))) != 1)
+								if (Convert.ToInt32(Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Hours))) != 1)
 								{
 									thedate += "s";
 								}
@@ -350,7 +304,7 @@ namespace Fynydd.Halide
 
 						else
 						{
-							if (days < 7 && days > 0)
+							if (days is < 7 and > 0)
 							{
 								if (days <= 1)
 								{
@@ -365,7 +319,7 @@ namespace Fynydd.Halide
 
 							else
 							{
-								double weeks = days / 7;
+								var weeks = days / 7;
 
 								if (weeks < 4)
 								{
@@ -374,7 +328,7 @@ namespace Fynydd.Halide
 
 								else
 								{
-									double months = Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Months));
+									var months = Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Months));
 
 									if (months < 12)
 									{
@@ -383,7 +337,7 @@ namespace Fynydd.Halide
 
 									else
 									{
-										double years = Math.Abs(DateDiff<double>(date, System.DateTime.Now, DateDiffComparisonType.Years));
+										var years = Math.Abs(DateDiff<double>(date, DateTime.Now, DateDiffComparisonType.Years));
 
 										thedate = FormatAbstract(years, "year", 0.3, 0.6, 0.8, future);
 									}
@@ -400,9 +354,11 @@ namespace Fynydd.Halide
 			}
 
 			catch
-			{ }
+			{
+				// ignored
+			}
 
-			return (thedate);
+			return thedate;
 		}
 
 		/// <summary>
@@ -417,7 +373,7 @@ namespace Fynydd.Halide
 			{
 				try
 				{
-					DateTime date = Convert.ToDateTime(value);
+					var date = Convert.ToDateTime(value);
 
 					return DateFormat(date, format);
 				}
@@ -428,10 +384,7 @@ namespace Fynydd.Halide
 				}
 			}
 
-			else
-			{
-				return string.Empty;
-			}
+			return string.Empty;
 		}
 
 		/// <summary>
@@ -446,7 +399,7 @@ namespace Fynydd.Halide
 		/// <returns>String representing the abstracted value.</returns>
 		public static string FormatAbstract<T>(this T value, string increment, double lowend, double halfway, double almost, bool future)
 		{
-			string result = "";
+			var result = string.Empty;
 
 			if (
 				typeof(T) == typeof(short) || typeof(T) == typeof(Int16) || typeof(T) == typeof(ushort) || typeof(T) == typeof(UInt16) ||
@@ -470,27 +423,27 @@ namespace Fynydd.Halide
 
 				else
 				{
-					double countwhole = count - (count % 1);
-					double mod = (count % 1);
+					var countwhole = count - (count % 1);
+					var mod = (count % 1);
 
 					if (mod < lowend)
 					{
-						result = countwhole.ToString() + " " + increment + "s" + (future ? " from now" : " ago");
+						result = countwhole + " " + increment + "s" + (future ? " from now" : " ago");
 					}
 
 					else if (mod >= lowend && mod < halfway)
 					{
-						result = (future ? "more than " : "over ") + countwhole.ToString() + " " + increment + "s" + (future ? " from now" : " ago");
+						result = (future ? "more than " : "over ") + countwhole + " " + increment + "s" + (future ? " from now" : " ago");
 					}
 
 					else if (mod >= halfway && mod < almost)
 					{
-						result = (future ? "about " : "almost ") + (countwhole + 1).ToString() + " " + increment + "s" + (future ? " from now" : " ago");
+						result = (future ? "about " : "almost ") + (countwhole + 1) + " " + increment + "s" + (future ? " from now" : " ago");
 					}
 
 					else if (mod >= almost)
 					{
-						result = (countwhole + 1).ToString() + " " + increment + "s" + (future ? " from now" : " ago");
+						result = (countwhole + 1) + " " + increment + "s" + (future ? " from now" : " ago");
 					}
 				}
 			}
@@ -506,7 +459,7 @@ namespace Fynydd.Halide
 		/// <returns>String with the time of day formatted as requested.</returns>
 		public static string TimeFormat(this DateTime date, TimeFormats format)
 		{
-			string result = string.Empty;
+			var result = string.Empty;
 
 			try
 			{
@@ -527,7 +480,9 @@ namespace Fynydd.Halide
 				}
 			}
 			catch
-			{ }
+			{
+				// ignored
+			}
 
 			return result;
 		}
@@ -561,7 +516,7 @@ namespace Fynydd.Halide
 		public static DateRangeStruct DateRange(this DateTime relativeDate, DateRangeOptions dateRangeOptions)
 		{
 			DateTime[] dates = { DateTime.Today, DateTime.Today };
-			DateTime myDate = relativeDate;
+			var myDate = relativeDate;
 
 			switch (dateRangeOptions)
 			{
@@ -586,10 +541,13 @@ namespace Fynydd.Halide
 
 				case DateRangeOptions.Quarter:
 
-					if (myDate.Month < 4) dates[0] = Convert.ToDateTime("1/1/" + myDate.Year.ToString());
-					if (myDate.Month > 3 && myDate.Month < 7) dates[0] = Convert.ToDateTime("4/1/" + myDate.Year.ToString());
-					if (myDate.Month > 6 && myDate.Month < 10) dates[0] = Convert.ToDateTime("7/1/" + myDate.Year.ToString());
-					if (myDate.Month > 9) dates[0] = Convert.ToDateTime("10/1/" + myDate.Year.ToString());
+					dates[0] = myDate.Month switch
+					{
+						< 4 => Convert.ToDateTime("1/1/" + myDate.Year),
+						> 3 and < 7 => Convert.ToDateTime("4/1/" + myDate.Year),
+						> 6 and < 10 => Convert.ToDateTime("7/1/" + myDate.Year),
+						> 9 => Convert.ToDateTime("10/1/" + myDate.Year)
+					};
 
 					dates[1] = dates[0].AddMonths(3);
 					dates[1] = dates[1].AddDays(-1);
@@ -598,15 +556,17 @@ namespace Fynydd.Halide
 
 				case DateRangeOptions.Year:
 
-					dates[0] = Convert.ToDateTime("1/1/" + myDate.Year.ToString());
-					dates[1] = Convert.ToDateTime("12/31/" + myDate.Year.ToString());
+					dates[0] = Convert.ToDateTime("1/1/" + myDate.Year);
+					dates[1] = Convert.ToDateTime("12/31/" + myDate.Year);
 
 					break;
 			}
 
-			DateRangeStruct result = new DateRangeStruct();
-			result.startDate = dates[0];
-			result.endDate = dates[1];
+			DateRangeStruct result = new DateRangeStruct
+			{
+				startDate = dates[0],
+				endDate = dates[1]
+			};
 
 			return result;
 		}
@@ -639,17 +599,17 @@ namespace Fynydd.Halide
 		/// <returns>Month name or abbreviation, or an empty string on error.</returns>
 		public static string GetMonthName<T>(this T value, bool returnAbbreviation = false)
 		{
-			string monthName = "";
-			int monthNumber = 0;
+			var monthName = string.Empty;
+			var monthNumber = 0;
 
 			if (typeof(T) == typeof(DateTime))
 			{
-				monthNumber = ((DateTime)Convert.ChangeType(value, typeof(DateTime))).Month;
+				monthNumber = ((DateTime?)Convert.ChangeType(value, typeof(DateTime)))?.Month ?? 0;
 			}
 
 			if (typeof(T) == typeof(string))
 			{
-				string mn = ((string)Convert.ChangeType(value, typeof(string)));
+				var mn = (string?)Convert.ChangeType(value, typeof(string)) ?? string.Empty;
 
 				if (mn.IsPureNumeric())
 				{
@@ -658,17 +618,17 @@ namespace Fynydd.Halide
 			}
 
 			if (
-				typeof(T) == typeof(short) || typeof(T) == typeof(Int16) || typeof(T) == typeof(ushort) || typeof(T) == typeof(UInt16) ||
-				typeof(T) == typeof(int) || typeof(T) == typeof(Int32) || typeof(T) == typeof(uint) || typeof(T) == typeof(UInt32) ||
-				typeof(T) == typeof(long) || typeof(T) == typeof(Int64) || typeof(T) == typeof(ulong) || typeof(T) == typeof(UInt64) ||
-				typeof(T) == typeof(float) || typeof(T) == typeof(Single) ||
-				typeof(T) == typeof(double) || typeof(T) == typeof(Double)
+				typeof(T) == typeof(short) || typeof(T) == typeof(short) || typeof(T) == typeof(ushort) || typeof(T) == typeof(ushort) ||
+				typeof(T) == typeof(int) || typeof(T) == typeof(int) || typeof(T) == typeof(uint) || typeof(T) == typeof(uint) ||
+				typeof(T) == typeof(long) || typeof(T) == typeof(long) || typeof(T) == typeof(ulong) || typeof(T) == typeof(ulong) ||
+				typeof(T) == typeof(float) || typeof(T) == typeof(float) ||
+				typeof(T) == typeof(double) || typeof(T) == typeof(double)
 				)
 			{
 				monthNumber = Convert.ToInt32(value);
 			}
 
-			if (monthNumber > 0 && monthNumber < 13)
+			if (monthNumber is > 0 and < 13)
 			{
 				if (returnAbbreviation)
 				{
@@ -699,18 +659,12 @@ namespace Fynydd.Halide
 				return dateTime;
 			}
 
-			else
+			if (dateTime.Kind == DateTimeKind.Utc)
 			{
-				if (dateTime.Kind == DateTimeKind.Utc)
-				{
-					return TimeZoneInfo.ConvertTimeFromUtc(dateTime, destinationTimeZone);
-				}
-
-				else
-				{
-					return TimeZoneInfo.ConvertTime(dateTime, destinationTimeZone);
-				}
+				return TimeZoneInfo.ConvertTimeFromUtc(dateTime, destinationTimeZone);
 			}
+
+			return TimeZoneInfo.ConvertTime(dateTime, destinationTimeZone);
 		}
 
 		/// <summary>
@@ -742,22 +696,22 @@ namespace Fynydd.Halide
 
 			if (seconds > 0)
 			{
-				result = (int)seconds + "s";
+				result = seconds + "s";
 
 				if (seconds >= 60)
 				{
-					TimeSpan ts = new TimeSpan(0, 0, seconds);
+					var ts = new TimeSpan(0, 0, seconds);
 
-					result = ts.Minutes.ToString() + "m" + delimitter + ts.Seconds.ToString() + "s";
+					result = ts.Minutes + "m" + delimitter + ts.Seconds + "s";
 
 					if (ts.Hours > 0)
 					{
-						result = ts.Hours.ToString() + "h" + delimitter + ts.Minutes.ToString() + "m" + delimitter + ts.Seconds.ToString() + "s";
+						result = ts.Hours + "h" + delimitter + ts.Minutes + "m" + delimitter + ts.Seconds + "s";
 					}
 
 					if (ts.Days > 0)
 					{
-						result = ts.Days + "d" + delimitter + ts.Hours.ToString() + "h" + delimitter + ts.Minutes.ToString() + "m" + delimitter + ts.Seconds.ToString() + "s";
+						result = ts.Days + "d" + delimitter + ts.Hours + "h" + delimitter + ts.Minutes + "m" + delimitter + ts.Seconds + "s";
 					}
 				}
 			}
@@ -766,9 +720,37 @@ namespace Fynydd.Halide
 		}
 	}
 
+/// <summary>
+/// Accurate, Simple, and Easy to use Stopwatch Class. This class
+/// can be used to track process execution time in seconds and milliseconds.
+/// </summary>
+/// <example>
+/// Sample usage:
+/// <code>
+/// <![CDATA[
+/// StopWatch sw = new StopWatch();
+/// sw.Start();
+/// Trace.Write("Stopwatch", "Process1:" sw.GetTime());
+/// Trace.Write("Stopwatch", "Process2:" sw.GetTime());
+/// sw.Stop()
+/// Trace.Write("Stopwatch", "Process 1 & 2:" sw.GetTime());
+/// ]]>
+/// </code>
+/// </example>
+public class StopWatch
+{
+	#region Properties
+
+	public DateTime StartDate { get; set; }
+
+	public DateTime StopDate { get; set; }
+
+	#endregion
+
+	#region Constructors
+
 	/// <summary>
-	/// Accurate, Simple, and Easy to use Stopwatch Class. This class
-	/// can be used to track process execution time in seconds and milliseconds.
+	/// Initializes the StopWatch to 0.
 	/// </summary>
 	/// <example>
 	/// Sample usage:
@@ -783,274 +765,245 @@ namespace Fynydd.Halide
 	/// ]]>
 	/// </code>
 	/// </example>
-	public class StopWatch
+	public StopWatch()
 	{
-		#region Properties
+		Reset();
+	}
 
-		public DateTime StartDate { get; set; }
+	/// <summary>
+	/// Initializes the StopWatch with a starting time.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// <![CDATA[
+	/// StopWatch sw = new StopWatch(DateTime.Now);
+	/// sw.Start();
+	/// Trace.Write("Stopwatch", "Process1:" sw.GetTime());
+	/// Trace.Write("Stopwatch", "Process2:" sw.GetTime());
+	/// sw.Stop()
+	/// Trace.Write("Stopwatch", "Process 1 & 2:" sw.GetTime());
+	/// ]]>
+	/// </code>
+	/// </example>
+	public StopWatch(DateTime startDate)
+	{
+		Reset();
 
-		public DateTime StopDate { get; set; }
+		StartDate = startDate;
+	}
 
-		#endregion
+	#endregion
 
-		#region Constructors
+	/// <summary>
+	/// Starts the Stopwatch.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// <![CDATA[
+	/// StopWatch stopwatch = new StopWatch();
+	/// stopwatch.Start();
+	/// Temporal.PauseExecution(2000);
+	/// stopwatch.Stop();
+	/// Assert.AreEqual(2, stopwatch.GetSeconds<int>(), "GetSeconds()");
+	/// ]]>
+	/// </code>
+	/// </example>
+	public void Start()
+	{
+		StartDate = DateTime.Now;
+	}
 
-		/// <summary>
-		/// Initializes the StopWatch to 0.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch sw = new StopWatch();
-		/// sw.Start();
-		/// Trace.Write("Stopwatch", "Process1:" sw.GetTime());
-		/// Trace.Write("Stopwatch", "Process2:" sw.GetTime());
-		/// sw.Stop()
-		/// Trace.Write("Stopwatch", "Process 1 & 2:" sw.GetTime());
-		/// ]]>
-		/// </code>
-		/// </example>
-		public StopWatch()
+	/// <summary>
+	/// Stops the Stopwatch.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// <![CDATA[
+	/// StopWatch stopwatch = new StopWatch();
+	/// stopwatch.Start();
+	/// Temporal.PauseExecution(2000);
+	/// stopwatch.Stop();
+	/// Assert.AreEqual(2, stopwatch.GetSeconds<int>(), "GetSeconds()");
+	/// ]]>
+	/// </code>
+	/// </example>
+	public void Stop()
+	{
+		StopDate = DateTime.Now;
+	}
+
+	/// <summary>
+	/// Reset the Stopwatch to 0.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// <![CDATA[
+	/// StopWatch stopwatch = new StopWatch();
+	/// stopwatch.Start();
+	/// Temporal.PauseExecution(2000);
+	/// stopwatch.Stop();
+	/// stopwatch.Reset();
+	/// Assert.AreEqual(0, stopwatch.GetSeconds<int>(), "GetSeconds()");
+	/// ]]>
+	/// </code>
+	/// </example>
+	public void Reset()
+	{
+		StartDate = DateTime.Now;
+		StopDate = StartDate;
+	}
+
+	/// <summary>
+	/// Returns the elapsed time in milliseconds since the StopWatch was started.
+	/// If the stopwatch has been stopped, the returned time will always be the same,
+	/// otherwise it will continue to increase.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// <![CDATA[
+	/// StopWatch stopwatch = new StopWatch();
+	/// stopwatch.Start();
+	/// Temporal.PauseExecution(2000);
+	/// Assert.AreEqual(2000, stopwatch.GetTime<int>(), "GetTime()");
+	/// Temporal.PauseExecution(1000);
+	/// stopwatch.Stop();
+	/// Assert.AreEqual(3000, stopwatch.GetTime<int>(), "GetTime()");
+	/// Temporal.PauseExecution(1000);
+	/// Assert.AreEqual(3000, stopwatch.GetTime<int>(), "GetTime()");
+	/// ]]>
+	/// </code>
+	/// </example>
+	/// <returns>Milliseconds since the stopwatch was started.</returns>
+	public T GetTime<T>()
+	{
+		double Elapsed = 0;
+
+		if (StartDate.Ticks < StopDate.Ticks)
 		{
-			Reset();
+			Elapsed = TimeSpan.FromTicks(StopDate.Ticks - StartDate.Ticks).TotalMilliseconds;
 		}
 
-		/// <summary>
-		/// Initializes the StopWatch with a starting time.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch sw = new StopWatch(DateTime.Now);
-		/// sw.Start();
-		/// Trace.Write("Stopwatch", "Process1:" sw.GetTime());
-		/// Trace.Write("Stopwatch", "Process2:" sw.GetTime());
-		/// sw.Stop()
-		/// Trace.Write("Stopwatch", "Process 1 & 2:" sw.GetTime());
-		/// ]]>
-		/// </code>
-		/// </example>
-		public StopWatch(DateTime startDate)
+		else
 		{
-			Reset();
-
-            StartDate = startDate;
+			Elapsed = TimeSpan.FromTicks(DateTime.Now.Ticks - StartDate.Ticks).TotalMilliseconds;
 		}
 
-		#endregion
+		return (T) (Convert.ChangeType(Elapsed, typeof(T)));
+	}
 
-		/// <summary>
-		/// Starts the Stopwatch.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch stopwatch = new StopWatch();
-		/// stopwatch.Start();
-		/// Temporal.PauseExecution(2000);
-		/// stopwatch.Stop();
-		/// Assert.AreEqual(2, stopwatch.GetSeconds<int>(), "GetSeconds()");
-		/// ]]>
-		/// </code>
-		/// </example>
-		public void Start()
+	/// <summary>
+	/// Returns the elapsed time in milliseconds since the StopWatch was started.
+	/// If the stopwatch has been stopped, the returned time will always be the same,
+	/// otherwise it will continue to increase.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// <![CDATA[
+	/// StopWatch stopwatch = new StopWatch();
+	/// stopwatch.Start();
+	/// Temporal.PauseExecution(2000);
+	/// Assert.AreEqual("2000", stopwatch.GetTime(), "GetTime()");
+	/// Temporal.PauseExecution(1000);
+	/// stopwatch.Stop();
+	/// Assert.AreEqual("3000", stopwatch.GetTime(), "GetTime()");
+	/// Temporal.PauseExecution(1000);
+	/// Assert.AreEqual("3000", stopwatch.GetTime(), "GetTime()");
+	/// ]]>
+	/// </code>
+	/// </example>
+	/// <returns>Milliseconds since the stopwatch was started.</returns>
+	public string GetTime()
+	{
+		return GetTime<string>();
+	}
+
+	/// <summary>
+	/// Returns the elapsed time in seconds since the StopWatch was started.
+	/// If the stopwatch has been stopped, the returned time will always be the same,
+	/// otherwise it will continue to increase.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// <![CDATA[
+	/// StopWatch stopwatch = new StopWatch();
+	/// stopwatch.Start();
+	/// Temporal.PauseExecution(2000);
+	/// Assert.AreEqual(2, stopwatch.GetSeconds<int>(), "GetTime()");
+	/// Temporal.PauseExecution(1000);
+	/// stopwatch.Stop();
+	/// Assert.AreEqual(3, stopwatch.GetSeconds<int>(), "GetTime()");
+	/// Temporal.PauseExecution(1000);
+	/// Assert.AreEqual(3, stopwatch.GetSeconds<int>(), "GetTime()");
+	/// ]]>
+	/// </code>
+	/// </example>
+	/// <returns>Seconds since the stopwatch was started.</returns>
+	public T GetSeconds<T>()
+	{
+		var seconds = GetTime<double>() / 1000;
+
+		return (T) (Convert.ChangeType(seconds, typeof(T)));
+	}
+
+	/// <summary>
+	/// Returns the elapsed time as a TimeSPan object.
+	/// If the stopwatch has been stopped, the returned TimeSpan will always be the same,
+	/// otherwise it will continue to increase.
+	/// </summary>
+	/// <example>
+	/// Sample usage:
+	/// <code>
+	/// StopWatch stopwatch = new StopWatch();
+	/// stopwatch.Start();
+	/// Temporal.PauseExecution(2000);
+	/// stopwatch.Stop();
+	/// Assert.AreEqual("00:00:02", stopwatch.GetTimeSpan().ToString(@"hh\:mm\:ss"), "GetTimeSpan() 2 seconds");
+	/// </code>
+	/// </example>
+	/// <returns>TimeSpan value of the elapsed time.</returns>
+	public TimeSpan GetTimeSpan()
+	{
+		return TimeSpan.FromMilliseconds(GetTime<double>());
+	}
+
+	/// <summary>
+	/// Format the elapsed time as a more friendly time span with a custom delimitter.
+	/// Like: 3d : 5h : 12m : 15s or 3d+5h+12m+15s
+	/// </summary>
+	/// <param name="delimitter">Text to separate time elements; defaults to " : ".</param>
+	/// <returns>Formatted timespan</returns>
+	public string FormatTimer(string delimitter = " : ")
+	{
+		var result = "0s";
+		var timespan = GetTimeSpan();
+
+		if (timespan.TotalSeconds > 0)
 		{
-			StartDate = DateTime.Now;
-		}
+			result = (int) timespan.TotalSeconds + "s";
 
-		/// <summary>
-		/// Stops the Stopwatch.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch stopwatch = new StopWatch();
-		/// stopwatch.Start();
-		/// Temporal.PauseExecution(2000);
-		/// stopwatch.Stop();
-		/// Assert.AreEqual(2, stopwatch.GetSeconds<int>(), "GetSeconds()");
-		/// ]]>
-		/// </code>
-		/// </example>
-		public void Stop()
-		{
-			StopDate = DateTime.Now;
-		}
-
-		/// <summary>
-		/// Reset the Stopwatch to 0.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch stopwatch = new StopWatch();
-		/// stopwatch.Start();
-		/// Temporal.PauseExecution(2000);
-		/// stopwatch.Stop();
-		/// stopwatch.Reset();
-		/// Assert.AreEqual(0, stopwatch.GetSeconds<int>(), "GetSeconds()");
-		/// ]]>
-		/// </code>
-		/// </example>
-		public void Reset()
-		{
-			StartDate = DateTime.Now;
-			StopDate = StartDate;
-		}
-
-		/// <summary>
-		/// Returns the elapsed time in milliseconds since the StopWatch was started.
-		/// If the stopwatch has been stopped, the returned time will always be the same,
-		/// otherwise it will continue to increase.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch stopwatch = new StopWatch();
-		/// stopwatch.Start();
-		/// Temporal.PauseExecution(2000);
-		/// Assert.AreEqual(2000, stopwatch.GetTime<int>(), "GetTime()");
-		/// Temporal.PauseExecution(1000);
-		/// stopwatch.Stop();
-		/// Assert.AreEqual(3000, stopwatch.GetTime<int>(), "GetTime()");
-		/// Temporal.PauseExecution(1000);
-		/// Assert.AreEqual(3000, stopwatch.GetTime<int>(), "GetTime()");
-		/// ]]>
-		/// </code>
-		/// </example>
-		/// <returns>Milliseconds since the stopwatch was started.</returns>
-		public T GetTime<T>()
-		{
-			double Elapsed = 0;
-
-			if (StartDate.Ticks < StopDate.Ticks)
+			if (timespan.TotalSeconds >= 60)
 			{
-				Elapsed = TimeSpan.FromTicks(StopDate.Ticks - StartDate.Ticks).TotalMilliseconds;
-			}
+				result = timespan.Minutes + "m" + delimitter + timespan.Seconds + "s";
 
-			else
-			{
-				Elapsed = TimeSpan.FromTicks(DateTime.Now.Ticks - StartDate.Ticks).TotalMilliseconds;
-			}
-
-			return (T)(Convert.ChangeType(Elapsed, typeof(T)));
-		}
-
-		/// <summary>
-		/// Returns the elapsed time in milliseconds since the StopWatch was started.
-		/// If the stopwatch has been stopped, the returned time will always be the same,
-		/// otherwise it will continue to increase.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch stopwatch = new StopWatch();
-		/// stopwatch.Start();
-		/// Temporal.PauseExecution(2000);
-		/// Assert.AreEqual("2000", stopwatch.GetTime(), "GetTime()");
-		/// Temporal.PauseExecution(1000);
-		/// stopwatch.Stop();
-		/// Assert.AreEqual("3000", stopwatch.GetTime(), "GetTime()");
-		/// Temporal.PauseExecution(1000);
-		/// Assert.AreEqual("3000", stopwatch.GetTime(), "GetTime()");
-		/// ]]>
-		/// </code>
-		/// </example>
-		/// <returns>Milliseconds since the stopwatch was started.</returns>
-		public string GetTime()
-		{
-			return GetTime<string>();
-		}
-
-		/// <summary>
-		/// Returns the elapsed time in seconds since the StopWatch was started.
-		/// If the stopwatch has been stopped, the returned time will always be the same,
-		/// otherwise it will continue to increase.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// <![CDATA[
-		/// StopWatch stopwatch = new StopWatch();
-		/// stopwatch.Start();
-		/// Temporal.PauseExecution(2000);
-		/// Assert.AreEqual(2, stopwatch.GetSeconds<int>(), "GetTime()");
-		/// Temporal.PauseExecution(1000);
-		/// stopwatch.Stop();
-		/// Assert.AreEqual(3, stopwatch.GetSeconds<int>(), "GetTime()");
-		/// Temporal.PauseExecution(1000);
-		/// Assert.AreEqual(3, stopwatch.GetSeconds<int>(), "GetTime()");
-		/// ]]>
-		/// </code>
-		/// </example>
-		/// <returns>Seconds since the stopwatch was started.</returns>
-		public T GetSeconds<T>()
-		{
-			double seconds = GetTime<double>() / (double)1000;
-
-			return (T)(Convert.ChangeType(seconds, typeof(T)));
-		}
-
-		/// <summary>
-		/// Returns the elapsed time as a TimeSPan object.
-		/// If the stopwatch has been stopped, the returned TimeSpan will always be the same,
-		/// otherwise it will continue to increase.
-		/// </summary>
-		/// <example>
-		/// Sample usage:
-		/// <code>
-		/// StopWatch stopwatch = new StopWatch();
-		/// stopwatch.Start();
-		/// Temporal.PauseExecution(2000);
-		/// stopwatch.Stop();
-		/// Assert.AreEqual("00:00:02", stopwatch.GetTimeSpan().ToString(@"hh\:mm\:ss"), "GetTimeSpan() 2 seconds");
-		/// </code>
-		/// </example>
-		/// <returns>TimeSpan value of the elapsed time.</returns>
-		public TimeSpan GetTimeSpan()
-		{
-			return TimeSpan.FromMilliseconds(GetTime<double>());
-		}
-
-		/// <summary>
-		/// Format the elapsed time as a more friendly time span with a custom delimitter.
-		/// Like: 3d : 5h : 12m : 15s or 3d+5h+12m+15s
-		/// </summary>
-		/// <param name="delimitter">Text to separate time elements; defaults to " : ".</param>
-		/// <returns>Formatted timespan</returns>
-		public string FormatTimer(string delimitter = " : ")
-		{
-			var result = "0s";
-            var timespan = GetTimeSpan();
-
-			if (timespan.TotalSeconds > 0)
-			{
-				result = (int)timespan.TotalSeconds + "s";
-
-				if (timespan.TotalSeconds >= 60)
+				if (timespan.Hours > 0)
 				{
-					result = timespan.Minutes.ToString() + "m" + delimitter + timespan.Seconds.ToString() + "s";
+					result = timespan.Hours + "h" + delimitter + timespan.Minutes + "m" + delimitter + timespan.Seconds + "s";
+				}
 
-					if (timespan.Hours > 0)
-					{
-						result = timespan.Hours.ToString() + "h" + delimitter + timespan.Minutes.ToString() + "m" + delimitter + timespan.Seconds.ToString() + "s";
-					}
-
-					if (timespan.Days > 0)
-					{
-						result = timespan.Days + "d" + delimitter + timespan.Hours.ToString() + "h" + delimitter + timespan.Minutes.ToString() + "m" + delimitter + timespan.Seconds.ToString() + "s";
-					}
+				if (timespan.Days > 0)
+				{
+					result = timespan.Days + "d" + delimitter + timespan.Hours + "h" + delimitter +					         timespan.Minutes + "m" + delimitter + timespan.Seconds + "s";
 				}
 			}
-
-			return result;
 		}
+
+		return result;
 	}
 }

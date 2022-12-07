@@ -5,7 +5,7 @@
     "compress_data": false,
     "confirm_start": true,
     "console_dark_mode": true,
-    "data_blacklist": "",
+    "data_exclusions": "",
     "objects": "all",
     "output_path": "~/Desktop/sqribe-backup",
     "suppress_start_warnings": false,
