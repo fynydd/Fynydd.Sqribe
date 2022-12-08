@@ -163,7 +163,7 @@ public class TableIndexes : ITableIndexes
         helpers.RestoreObject(
             token, 
             ",index,", 
-            "table index", 
+            "table and view index", 
             settings.ScriptPath + settings.TableIndexesFilename
         );
     }

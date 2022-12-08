@@ -1105,7 +1105,7 @@ public class Helpers : IHelpers
                             script = script.Replace("-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed + Constants.LineFeed, string.Empty);
                             script = script.Replace("-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed, string.Empty);
 
-                            using (SqlConnection cn = new SqlConnection(settings.DataSource))
+                            using (var cn = new SqlConnection(settings.DataSource))
                             {
                                 cn.Open();
 
