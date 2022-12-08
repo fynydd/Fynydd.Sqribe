@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -59,10 +60,9 @@ public class TableCheckConstraints : ITableCheckConstraints
         if (settings.SqlObjects.Contains(",cc,") && settings.Abort == false)
         {
             const string objectName = "table check constraint";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
-            var currentCount = 0;
 
             helpers.GenerateCreateScript (
                 objectName, 
@@ -70,16 +70,21 @@ public class TableCheckConstraints : ITableCheckConstraints
                 (script, token) => {
                         
                     var processedCount = 0;
+                    var currentCount = 0;
                     var tableCount = 0;
                     var constraintTemplate = helpers.LoadTemplate("table-check-constraint.sql");
 
-                    using (var tables = new DataReader(helpers.LoadScript("select-table-names.sql"), settings.DataSource, useRewind: true))
+                    using (var tables = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("select-table-names.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = tables.ExecuteAsync(cts.Token);
-
+                            var task = tables.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -90,72 +95,89 @@ public class TableCheckConstraints : ITableCheckConstraints
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (tables.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (tables.HasRows)
                                 {
-                                    while (tables.Read() && settings.Abort == false)
+                                    while (tables.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
                                         tableCount++;
+
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (tables.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (tables.HasRows)
+                                tables.Close();
+
+                                using (tables.ExecuteReader(cts.Token))
                                 {
-                                    while (tables.Read() && settings.Abort == false)
+                                    if (tables.HasRows)
                                     {
-                                        using (var checks = new DataReader(helpers.LoadScript("select-table-check-constraints.sql").Replace("{SCHEMA_NAME}", tables["SCHEMA_NAME"]).Replace("{TABLE_NAME}", tables["TABLE_NAME"]), settings.DataSource))
+                                        while (tables.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
-                                            if (settings.Abort == false)
+                                            if (settings.Abort)
                                             {
-                                                var cts2 = new CancellationTokenSource();
-                                                var task2 = checks.ExecuteAsync(cts2.Token);
-
-                                                while (task2.IsCompleted == false)
-                                                {
-                                                    if (settings.Abort)
-                                                    {
-                                                        cts2.Cancel();
-                                                    }
-
-                                                    Thread.Sleep(Constants.SleepNumber);
-                                                }
-
+                                                cts.Cancel();
+                                                break;
+                                            }
+                                            
+                                            using (var checks = new SqlReader(new SqlReaderConfiguration
+                                                   {
+                                                       ConnectionString = settings.DataSource,
+                                                       CommandText = helpers.LoadScript("select-table-check-constraints.sql").Replace("{SCHEMA_NAME}", tables.SafeGetString("SCHEMA_NAME")).Replace("{TABLE_NAME}", tables.SafeGetString("TABLE_NAME"))
+                                                   }))
+                                            {
                                                 if (settings.Abort == false)
                                                 {
-                                                    if (checks.IsReady)
+                                                    var task2 = checks.ExecuteReaderAsync(cts.Token);
+        
+                                                    while (task2.IsCompleted == false)
                                                     {
-                                                        if (checks.HasRows)
+                                                        if (settings.Abort)
                                                         {
-                                                            while (checks.Read() && settings.Abort == false)
+                                                            cts.Cancel();
+                                                        }
+
+                                                        Thread.Sleep(Constants.SleepNumber);
+                                                    }
+
+                                                    if (checks.HasRows)
+                                                    {
+                                                        while (checks.ReadAsync(cts.Token).GetAwaiter().GetResult())
+                                                        {
+                                                            if (settings.Abort)
                                                             {
-                                                                var generatedConstraint = constraintTemplate;
-
-                                                                generatedConstraint = generatedConstraint.Replace("SCHEMA_NAME", tables["SCHEMA_NAME"]);
-                                                                generatedConstraint = generatedConstraint.Replace("TABLE_NAME", tables["TABLE_NAME"]);
-                                                                generatedConstraint = generatedConstraint.Replace("CONSTRAINT_NAME", checks["CONSTRAINT_NAME"]);
-                                                                generatedConstraint = generatedConstraint.Replace("[COLUMN] IS NOT NULL", checks["CONSTRAINT"]);
-
-                                                                script += generatedConstraint;
-
-                                                                processedCount++;
+                                                                cts.Cancel();
+                                                                break;
                                                             }
+
+                                                            var generatedConstraint = constraintTemplate;
+
+                                                            generatedConstraint = generatedConstraint.Replace("SCHEMA_NAME", tables.SafeGetString("SCHEMA_NAME"));
+                                                            generatedConstraint = generatedConstraint.Replace("TABLE_NAME", tables.SafeGetString("TABLE_NAME"));
+                                                            generatedConstraint = generatedConstraint.Replace("CONSTRAINT_NAME", checks.SafeGetString("CONSTRAINT_NAME"));
+                                                            generatedConstraint = generatedConstraint.Replace("[COLUMN] IS NOT NULL", checks.SafeGetString("CONSTRAINT"));
+
+                                                            script += generatedConstraint;
+
+                                                            processedCount++;
                                                         }
                                                     }
                                                 }
                                             }
-                                        }
-
-                                        if (settings.Abort == false)
-                                        {
-                                            currentCount++;
-                                            helpers.ShowPercentageComplete(token, tableCount, currentCount, startDate, ref lastTimeUpdate, prefix + " ");
+                                        
+                                            if (settings.Abort == false)
+                                            {
+                                                currentCount++;
+                                                helpers.ShowPercentageComplete(token, tableCount, currentCount, startDate, ref lastTimeUpdate, prefix + " ");
+                                            }
                                         }
                                     }
                                 }

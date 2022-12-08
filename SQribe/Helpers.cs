@@ -10,6 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -376,14 +377,14 @@ public class Helpers : IHelpers
         {
             var files = Directory.EnumerateFiles(settings.OutputPath, settings.DataFilePrefix + "*" + suffix);
 
-            if (files == null || (files != null && files.Any() == false))
+            if (files.Any() == false)
             {
                 suffix = ".sql";
 
                 files = Directory.EnumerateFiles(settings.OutputPath, settings.DataFilePrefix + "*" + suffix);
             }
 
-            if (files != null && files.Any())
+            if (files.Any())
             {
                 foreach (var file in files)
                 {
@@ -546,7 +547,7 @@ public class Helpers : IHelpers
         var schemaInitScript = LoadTemplate("init-schemas.sql");
         long token = -1;
 
-        var log = "### Started schema script creation for " + objectName.PluralizeNoun(2).ToUpperFirstCharacter() + Environment.NewLine;
+        var log = "### Started schema script creation for " + objectName.Pluralize().Humanize(LetterCasing.Sentence) + Environment.NewLine;
 
         while (token == -1)
         {
@@ -555,11 +556,11 @@ public class Helpers : IHelpers
 
         try
         {
-            output.Write(objectName.PluralizeNoun(2).ToUpperFirstCharacter(), token, (int)Constants.GetColor("busy", settings.ConsoleDarkMode), ephemeral: true);
+            output.Write(objectName.Pluralize().Humanize(LetterCasing.Sentence), token, (int)Constants.GetColor("busy", settings.ConsoleDarkMode), ephemeral: true);
 
             File.AppendAllText(schemaScriptPath, schemaInitScript, Encoding.UTF8);
 
-            script += LoadTemplate("print-message.sql").Replace("{MESSAGE}", "CREATE " + objectName.PluralizeNoun(2));
+            script += LoadTemplate("print-message.sql").Replace("{MESSAGE}", "CREATE " + objectName.Pluralize());
 
             var results = block(script, token);
             var processedCount = results.Item2;
@@ -592,7 +593,7 @@ public class Helpers : IHelpers
 
             settings.Abort = true;
 
-            log += "- Helpers.GenerateCreateScript() Exception (" + objectName.PluralizeNoun(2).ToUpperFirstCharacter() + "): " + e.Message + Environment.NewLine;
+            log += "- Helpers.GenerateCreateScript() Exception (" + objectName.Pluralize().Humanize(LetterCasing.Sentence) + "): " + e.Message + Environment.NewLine;
         }
 
         Interlocked.Decrement(ref counter);
@@ -604,14 +605,14 @@ public class Helpers : IHelpers
         {
             output.Write("idle", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode), ephemeral: true);
 
-            log += "- " + objectName.PluralizeNoun(2).ToUpperFirstCharacter() + " result: DONE" + Environment.NewLine;
+            log += "- " + objectName.Pluralize().Humanize(LetterCasing.Sentence) + " result: DONE" + Environment.NewLine;
         }
 
         else
         {
             output.Write("ABORTED", token, (int)Constants.GetColor("error", settings.ConsoleDarkMode), ephemeral: true);
 
-            log += "- " + objectName.PluralizeNoun(2).ToUpperFirstCharacter() + " result: ABORTED" + Environment.NewLine;
+            log += "- " + objectName.Pluralize().Humanize(LetterCasing.Sentence) + " result: ABORTED" + Environment.NewLine;
         }
 
         settings.Log(log, false);
@@ -633,9 +634,9 @@ public class Helpers : IHelpers
     {
         if (settings.SqlObjects.Contains(objectFragment) && settings.Abort == false)
         {
-            if (VerifyBackupFileExists(schemaScriptPath, "Will not drop " + objectName.PluralizeNoun(2), token))
+            if (VerifyBackupFileExists(schemaScriptPath, "Will not drop " + objectName.Pluralize(), token))
             {
-                RunDropScript(LoadScript(dropScriptPath), objectName.PluralizeNoun(2).ToUpperFirstCharacter() + " dropped", showSuccess: false, objectFragment: objectFragment);
+                RunDropScript(LoadScript(dropScriptPath), objectName.Pluralize().Humanize(LetterCasing.Sentence) + " dropped", showSuccess: false, objectFragment: objectFragment);
             }
         }
     }
@@ -651,7 +652,7 @@ public class Helpers : IHelpers
     {
         if (settings.Abort == false && settings.SqlObjects.Contains(objectFragment))
         {
-            if (VerifyBackupFileExists(schemaScriptPath, "Cannot create " + objectName.PluralizeNoun(2), token))
+            if (VerifyBackupFileExists(schemaScriptPath, "Cannot create " + objectName.Pluralize(), token))
             {
                 RunRestoreScriptFile(schemaScriptPath, objectName, token, objectFragment);
             }
@@ -907,30 +908,42 @@ public class Helpers : IHelpers
 
         if (string.IsNullOrWhiteSpace(settings.DataExclusionlist) == false)
         {
-            using (var reader = new DataReader(LoadScript("select-table-names.sql"), settings.DataSource))
+            using (var reader = new SqlReader(new SqlReaderConfiguration
+                   {
+                       ConnectionString = settings.DataSource,
+                       CommandText = LoadScript("select-table-names.sql")
+                   }))
             {
                 if (settings.Abort == false)
                 {
                     var cts = new CancellationTokenSource();
-                    var task = reader.ExecuteAsync(cts.Token);
-
+                    var task = reader.ExecuteReaderAsync(cts.Token);
+        
                     while (task.IsCompleted == false)
                     {
                         if (settings.Abort)
                         {
                             cts.Cancel();
                         }
+
+                        Thread.Sleep(Constants.SleepNumber);
                     }
 
-                    if (reader.IsReady)
+                    if (settings.Abort == false)
                     {
                         if (reader.HasRows)
                         {
-                            while (reader.Read() && settings.Abort == false)
+                            while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                             {
-                                if (settings.IsProtectedTable(reader["SCHEMA_NAME"] + "." + reader["TABLE_NAME"]))
+                                if (settings.Abort)
                                 {
-                                    result.Add("[" + reader["SCHEMA_NAME"] + "].[" + reader["TABLE_NAME"] + "]");
+                                    cts.Cancel();
+                                    break;
+                                }
+
+                                if (settings.IsProtectedTable(reader.SafeGetString("SCHEMA_NAME") + "." + reader.SafeGetString("TABLE_NAME")))
+                                {
+                                    result.Add("[" + reader.SafeGetString("SCHEMA_NAME") + "].[" + reader.SafeGetString("TABLE_NAME") + "]");
                                 }
                             }
                         }
@@ -1083,7 +1096,7 @@ public class Helpers : IHelpers
                         }
 
                         output.WriteIndentationArrow(token);
-                        output.Write(singularName.PluralizeNoun(count).ToUpperFirstCharacter() + Constants.Ellipsis, token);
+                        output.Write((count == 1 ? singularName : singularName.Pluralize()).Humanize(LetterCasing.Sentence) + Constants.Ellipsis, token);
 
                         if (script.Length > 0)
                         {
@@ -1147,7 +1160,7 @@ public class Helpers : IHelpers
                     else
                     {
                         output.WriteIndentationArrow(token);
-                        output.Write(singularName.PluralizeNoun(count).ToUpperFirstCharacter() + Constants.Ellipsis, token);
+                        output.Write((count == 1 ? singularName : singularName.Pluralize()).Humanize(LetterCasing.Sentence) + Constants.Ellipsis, token);
                         output.WriteLine("0 created", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
 
                         log += "- Result: 0 created" + Environment.NewLine;
@@ -1176,7 +1189,7 @@ public class Helpers : IHelpers
 
             settings.Abort = true;
 
-            log += "- Helpers.RunRestoreScriptFile() Exception (" + singularName.PluralizeNoun(2).ToUpperFirstCharacter() + "): " + e.Message + Environment.NewLine;
+            log += "- Helpers.RunRestoreScriptFile() Exception (" + singularName.Pluralize().Humanize(LetterCasing.Sentence) + "): " + e.Message + Environment.NewLine;
         }
 
         settings.Log(log, false);

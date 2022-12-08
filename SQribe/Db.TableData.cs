@@ -10,6 +10,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -119,13 +120,17 @@ public class TableData : ITableData
             totalByteCount = 0;
             totalRowCount = 0;
 
-            using (var reader = new DataReader(helpers.LoadScript("select-table-dependencies.sql"), settings.DataSource))
+            using (var reader = new SqlReader(new SqlReaderConfiguration
+                   {
+                       ConnectionString = settings.DataSource,
+                       CommandText = helpers.LoadScript("select-table-dependencies.sql")
+                   }))
             {
                 if (settings.Abort == false)
                 {
                     var cts = new CancellationTokenSource();
-                    var task = reader.ExecuteAsync(cts.Token);
-
+                    var task = reader.ExecuteReaderAsync(cts.Token);
+        
                     while (task.IsCompleted == false)
                     {
                         if (settings.Abort)
@@ -136,20 +141,26 @@ public class TableData : ITableData
                         Thread.Sleep(Constants.SleepNumber);
                     }
 
-                    if (reader.IsReady)
+                    if (settings.Abort == false)
                     {
                         if (reader.HasRows)
                         {
-                            while (reader.Read() && settings.Abort == false)
+                            while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                             {
-                                if (settings.IsExcludedForData(reader["SCHEMA_NAME"] + "." + reader["TABLE_NAME"]) == false)
+                                if (settings.Abort)
+                                {
+                                    cts.Cancel();
+                                    break;
+                                }
+
+                                if (settings.IsExcludedForData(reader.SafeGetString("SCHEMA_NAME") + "." + reader.SafeGetString("TABLE_NAME")) == false)
                                 {
                                     tableCount++;
                                 }
 
                                 else
                                 {
-                                    log += "- EXCLUDED: [" + reader["SCHEMA_NAME"] + "].[" + reader["TABLE_NAME"] + "]" + Environment.NewLine;
+                                    log += "- EXCLUDED: [" + reader.SafeGetString("SCHEMA_NAME") + "].[" + reader.SafeGetString("TABLE_NAME") + "]" + Environment.NewLine;
                                 }
                             }
                         }
@@ -157,7 +168,7 @@ public class TableData : ITableData
                 }
             }
 
-            output.Write(tableCount.ToString("#,##0") + " " + "table".PluralizeNoun(tableCount), groupToken);
+            output.Write(tableCount.ToString("#,##0") + " " + (tableCount == 1 ? "table" : "table".Pluralize()), groupToken);
             output.WriteArrow(groupToken);
 
             settings.Log(log, false);
@@ -169,15 +180,19 @@ public class TableData : ITableData
             var threads = new ConcurrentQueue<Thread>();
             var threadsRunning = 0;
 
-            using (var tables = new DataReader(helpers.LoadScript("select-table-dependencies.sql"), settings.DataSource))
+            using (var tables = new SqlReader(new SqlReaderConfiguration
+                   {
+                       ConnectionString = settings.DataSource,
+                       CommandText = helpers.LoadScript("select-table-dependencies.sql")
+                   }))
             {
                 var level = -1;
 
                 if (settings.Abort == false)
                 {
                     var cts = new CancellationTokenSource();
-                    var task = tables.ExecuteAsync(cts.Token);
-
+                    var task = tables.ExecuteReaderAsync(cts.Token);
+        
                     while (task.IsCompleted == false)
                     {
                         if (settings.Abort)
@@ -188,15 +203,21 @@ public class TableData : ITableData
                         Thread.Sleep(Constants.SleepNumber);
                     }
 
-                    if (tables.IsReady)
+                    if (settings.Abort == false)
                     {
                         if (tables.HasRows)
                         {
                             counter = tableCount;
-
-                            while (tables.Read() && settings.Abort == false)
+                            
+                            while (tables.ReadAsync(cts.Token).GetAwaiter().GetResult())
                             {
-                                if (settings.IsExcludedForData(tables["SCHEMA_NAME"] + "." + tables["TABLE_NAME"]) == false)
+                                if (settings.Abort)
+                                {
+                                    cts.Cancel();
+                                    break;
+                                }
+
+                                if (settings.IsExcludedForData(tables.SafeGetString("SCHEMA_NAME") + "." + tables.SafeGetString("TABLE_NAME")) == false)
                                 {
                                     long _token = -1;
                                     var p = new DataThreadParams();
@@ -207,7 +228,7 @@ public class TableData : ITableData
                                         {
                                             threadsRunning = 0;
 
-                                            if (level > 0 && tables.GetValue<int>("LEVEL") != level)
+                                            if (level > 0 && tables.SafeGetInt("LEVEL") != level)
                                             {
                                                 foreach (var thread in threads)
                                                 {
@@ -233,10 +254,10 @@ public class TableData : ITableData
                                     if (settings.Abort == false)
                                     {
                                         p.tableCount = tableCount;
-                                        p.schemaName = tables["SCHEMA_NAME"];
-                                        p.tableName = tables["TABLE_NAME"];
-                                        level = p.level = tables.GetValue<int>("LEVEL");
-                                        p.rowCount = tables.GetValue<int>("ROW_COUNT");
+                                        p.schemaName = tables.SafeGetString("SCHEMA_NAME");
+                                        p.tableName = tables.SafeGetString("TABLE_NAME");
+                                        level = p.level = tables.SafeGetInt("LEVEL");
+                                        p.rowCount = tables.SafeGetInt("ROW_COUNT");
                                         p.token = _token;
                                         p.groupToken = groupToken;
 
@@ -272,7 +293,7 @@ public class TableData : ITableData
                     }
                 }
             }
-
+            
             if (settings.Abort == false)
             {
                 do
@@ -353,19 +374,23 @@ public class TableData : ITableData
                 if (p.rowCount > 0)
                 {
                     var scrSql = new StringBuilder();
-                    var prefix = p.schemaName + "." + p.tableName + (settings.TurboMode == false ? " [L" + p.level + "]" : string.Empty) + Constants.GetArrow() + "Scripting " + p.rowCount.ToString("#,##0") + " " + "row".PluralizeNoun(p.rowCount);
+                    var prefix = p.schemaName + "." + p.tableName + (settings.TurboMode == false ? " [L" + p.level + "]" : string.Empty) + Constants.GetArrow() + "Scripting " + p.rowCount.ToString("#,##0") + " " + (p.rowCount == 1 ? "row" : "row".Pluralize());
                     var currentFile = settings.OutputPath + settings.DataFilePrefix + "-" + p.schemaName + "." + p.tableName + ".sql";
                     var hasIdentity = false;
 
-                    log += Environment.NewLine + "#### [" + p.schemaName + "].[" + p.tableName + "] (" + p.rowCount.ToString("#,##0") + " " + "row".PluralizeNoun(p.rowCount) + ")" + Environment.NewLine;
+                    log += Environment.NewLine + "#### [" + p.schemaName + "].[" + p.tableName + "] (" + p.rowCount.ToString("#,##0") + " " + (p.rowCount == 1 ? "row" : "row".Pluralize()) + ")" + Environment.NewLine;
 
-                    using (var reader = new DataReader(helpers.LoadScript("select-table-has-identity.sql").Replace("{TABLE_NAME}", p.tableName).Replace("{SCHEMA_NAME}", p.schemaName), settings.DataSource))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("select-table-has-identity.sql").Replace("{TABLE_NAME}", p.tableName).Replace("{SCHEMA_NAME}", p.schemaName)
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -376,7 +401,7 @@ public class TableData : ITableData
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
@@ -386,13 +411,17 @@ public class TableData : ITableData
                         }
                     }
 
-                    using (var reader = new DataReader(helpers.LoadScript("select-table-primary-keys.sql").Replace("{TABLE_NAME}", p.tableName).Replace("{SCHEMA_NAME}", p.schemaName), settings.DataSource))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("select-table-primary-keys.sql").Replace("{TABLE_NAME}", p.tableName).Replace("{SCHEMA_NAME}", p.schemaName)
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -403,18 +432,24 @@ public class TableData : ITableData
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
-                                    while (reader.Read())
+                                    while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
+
                                         if (string.IsNullOrEmpty(orderBy) == false)
                                         {
                                             orderBy += ", ";
                                         }
 
-                                        orderBy += "[" + reader["COLUMN_NAME"] + "]";
+                                        orderBy += "[" + reader.SafeGetString("COLUMN_NAME") + "]";
                                     }
                                 }
                             }
@@ -430,15 +465,19 @@ public class TableData : ITableData
 
                     if (settings.Abort == false)
                     {
-                        using (var reader = new DataReader(procedureScript, settings.DataSource))
+                        using (var reader = new SqlReader(new SqlReaderConfiguration
+                               {
+                                   ConnectionString = settings.DataSource,
+                                   CommandText = procedureScript
+                               }))
                         {
                             if (settings.Abort == false)
                             {
                                 var cts = new CancellationTokenSource();
-                                var task = reader.ExecuteAsync(cts.Token);
+                                var task = reader.ExecuteReaderAsync(cts.Token);
                                 var startDate = DateTime.Now;
                                 var lastTimeUpdate = string.Empty;
-
+        
                                 while (task.IsCompleted == false)
                                 {
                                     if (settings.Abort)
@@ -447,89 +486,92 @@ public class TableData : ITableData
                                     }
 
                                     helpers.ShowElapsedTime(_token, startDate, ref lastTimeUpdate, p.schemaName + "." + p.tableName + (settings.TurboMode == false ? " [L" + p.level + "]" : string.Empty) + Constants.GetArrow() + "Querying (", ")");
-
+                                    
                                     Thread.Sleep(Constants.SleepNumber);
                                 }
 
                                 if (settings.Abort == false)
                                 {
-                                    if (reader.IsReady)
+                                    if (reader.HasRows)
                                     {
-                                        if (reader.HasRows)
+                                        if (settings.ChunkData == false)
                                         {
+                                            scrSql.Append(helpers.LoadTemplate("init-data-inserts.sql"));
+                                        }
+
+                                        scrSql.Append(@"-- SQRIBE/TABLE;" + settings.Hash + Constants.LineFeed);
+                                        scrSql.Append(@"-- Adding " + p.rowCount.ToString("#,##0") + " " + (p.rowCount == 1 ? "row" : "row".Pluralize()) + " to " + p.schemaName + "." + p.tableName + Constants.LineFeed + Constants.LineFeed);
+
+                                        if (hasIdentity)
+                                        {
+                                            scrSql.Append(helpers.LoadTemplate("set-identity-inserts-on.sql").Replace("{SCHEMA_NAME}", p.schemaName).Replace("{TABLE_NAME}", p.tableName));
+                                        }
+
+                                        scrSql.Append(helpers.LoadTemplate("transaction-block-begin.sql"));
+
+                                        var goRowCount = 1000; // 1,000 rows per GO (or file write max of 100mb)
+                                        var goInterval = 0;
+                                        
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
+                                        {
+                                            if (settings.Abort)
+                                            {
+                                                cts.Cancel();
+                                                break;
+                                            }
+
+                                            var st = reader.SafeGetString(0) + Constants.LineFeed;
+
+                                            scrSql.Append(st.Replace("CONVERT(varbinary(max),''", "CONVERT(varbinary(max),'0x'"));
+
+                                            totalProcessed++;
+
+                                            helpers.ShowPercentageComplete(_token, p.rowCount, totalProcessed, startDate, ref lastTimeUpdate, prefix + " ");
+
                                             if (settings.ChunkData == false)
                                             {
-                                                scrSql.Append(helpers.LoadTemplate("init-data-inserts.sql"));
-                                            }
-
-                                            scrSql.Append(@"-- SQRIBE/TABLE;" + settings.Hash + Constants.LineFeed);
-                                            scrSql.Append(@"-- Adding " + p.rowCount.ToString("#,##0") + " " + "row".PluralizeNoun(p.rowCount) + " to " + p.schemaName + "." + p.tableName + Constants.LineFeed + Constants.LineFeed);
-
-                                            if (hasIdentity)
-                                            {
-                                                scrSql.Append(helpers.LoadTemplate("set-identity-inserts-on.sql").Replace("{SCHEMA_NAME}", p.schemaName).Replace("{TABLE_NAME}", p.tableName));
-                                            }
-
-                                            scrSql.Append(helpers.LoadTemplate("transaction-block-begin.sql"));
-
-                                            var goRowCount = 1000; // 1,000 rows per GO (or file write max of 100mb)
-                                            var goInterval = 0;
-
-                                            while (reader.Read() && settings.Abort == false)
-                                            {
-                                                var st = reader[0] + Constants.LineFeed;
-
-                                                scrSql.Append(st.Replace("CONVERT(varbinary(max),''", "CONVERT(varbinary(max),'0x'"));
-
-                                                totalProcessed++;
-
-                                                helpers.ShowPercentageComplete(_token, p.rowCount, totalProcessed, startDate, ref lastTimeUpdate, prefix + " ");
-
-                                                if (settings.ChunkData == false)
+                                                goInterval++;
+                                                    
+                                                // 1,000 rows or file write max of 100mb per GO
+                                                if (goInterval >= goRowCount || scrSql.Length > 1000 * 1000 * 100)
                                                 {
-                                                    goInterval++;
-                                                        
-                                                    // 1,000 rows or file write max of 100mb per GO
-                                                    if (goInterval >= goRowCount || scrSql.Length > 1000 * 1000 * 100)
-                                                    {
-                                                        scrSql.Append(@"GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed);
-                                                        goInterval = 0;
-                                                    }
-                                                }
-
-                                                // Write to disk at 100mb to conserve memory
-                                                if (scrSql.Length > 1000 * 1000 * 100)
-                                                {
-                                                    var tsk = File.AppendAllTextAsync(currentFile, scrSql.ToString(), Encoding.UTF8, cts.Token);
-
-                                                    while (tsk.IsCompleted == false && settings.Abort == false)
-                                                    {
-                                                        Thread.Sleep(Constants.SleepNumber);
-                                                    }
-
-                                                    if (settings.Abort == false)
-                                                    {
-                                                        Interlocked.Add(ref totalByteCount, scrSql.Length);
-
-                                                        scrSql.Clear();
-                                                    }
+                                                    scrSql.Append(@"GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed);
+                                                    goInterval = 0;
                                                 }
                                             }
 
-                                            scrSql.Append(Constants.LineFeed + helpers.LoadTemplate("transaction-block-commit.sql"));
-
-                                            if (settings.Abort == false)
+                                            // Write to disk at 100mb to conserve memory
+                                            if (scrSql.Length > 1000 * 1000 * 100)
                                             {
-                                                Interlocked.Add(ref totalRowCount, totalProcessed);
+                                                var tsk = File.AppendAllTextAsync(currentFile, scrSql.ToString(), Encoding.UTF8, cts.Token);
 
-                                                helpers.ShowPercentageComplete(_token, 100, 100, startDate, ref lastTimeUpdate, prefix + " ");
+                                                while (tsk.IsCompleted == false && settings.Abort == false)
+                                                {
+                                                    Thread.Sleep(Constants.SleepNumber);
+                                                }
+
+                                                if (settings.Abort == false)
+                                                {
+                                                    Interlocked.Add(ref totalByteCount, scrSql.Length);
+
+                                                    scrSql.Clear();
+                                                }
                                             }
                                         }
-                                
-                                        if (settings.Abort)
+                                        
+                                        scrSql.Append(Constants.LineFeed + helpers.LoadTemplate("transaction-block-commit.sql"));
+
+                                        if (settings.Abort == false)
                                         {
-                                            output.Write("ABORTING", _token, (int)Constants.GetColor("error", settings.ConsoleDarkMode), ephemeral: true);
+                                            Interlocked.Add(ref totalRowCount, totalProcessed);
+
+                                            helpers.ShowPercentageComplete(_token, 100, 100, startDate, ref lastTimeUpdate, prefix + " ");
                                         }
+                                    }
+                                    
+                                    if (settings.Abort)
+                                    {
+                                        output.Write("ABORTING", _token, (int)Constants.GetColor("error", settings.ConsoleDarkMode), ephemeral: true);
                                     }
                                 }
                             }
@@ -550,7 +592,7 @@ public class TableData : ITableData
                                 scrSql.Clear();
                             }
 
-                            if (settings.ChunkData == false && settings.CompressData)
+                            if (settings is {ChunkData: false, CompressData: true})
                             {
                                 if (File.Exists(currentFile))
                                 {
@@ -1064,7 +1106,7 @@ public class TableData : ITableData
 
                 output.Write(counter.ToString("#,##0") + " left", groupToken, (int)Constants.GetColor("busy", settings.ConsoleDarkMode), ephemeral: true);
 
-                output.Write(files.Count().ToString("#,##0") + " " + (chunkMode ? "chunk" : "table").PluralizeNoun(files.Count()), groupToken);
+                output.Write(files.Count().ToString("#,##0") + " " + (chunkMode ? "chunk" : "table") + (files.Count() == 1 ? string.Empty : "s"), groupToken);
                 output.WriteArrow(groupToken);
 
                 foreach (var filePath in files.OrderBy(f => new FileInfo(f).Length))
@@ -1376,7 +1418,7 @@ public class TableData : ITableData
 
                     Interlocked.Add(ref totalRowCount, lineCount);
 
-                    log += "- Inserted " + lineCount.ToString("#,##0") + " " + "row".PluralizeNoun(lineCount) + Environment.NewLine;
+                    log += "- Inserted " + lineCount.ToString("#,##0") + " " + (lineCount == 1 ? "row" : "row".Pluralize()) + Environment.NewLine;
                 }
 
                 catch (Exception e)

@@ -214,7 +214,7 @@ internal class Settings : ISettings
     public StopWatch Timer { get; set; }
     public string DatabaseName => GetServerAndDatabase().Item2;
 
-    public string Platform => Identify.GetOSPlatform().ToString();
+    public string Platform => Identify.GetOsPlatform().ToString();
 
     public string PlatformMajorVersion
     {
@@ -754,7 +754,7 @@ internal class Settings : ISettings
                 Logging = jt.Value<bool>();
             }
 
-            if (Identify.GetOSPlatform() == OSPlatform.Windows)
+            if (Identify.GetOsPlatform() == OSPlatform.Windows)
             {
                 // ReSharper disable once ConvertIfStatementToSwitchStatement
                 if (item.Key.ToLower() == "win_output_path")
@@ -997,7 +997,7 @@ internal class Settings : ISettings
                 Hash = DataSource.MD5String()[..6];
             }
 
-            BackupTimestamp = DateTime.UtcNow.DateFormat(DateFormats.Utc);
+            BackupTimestamp = $"{DateTime.UtcNow:s}Z";
             BackupSqlEdition = string.Empty;
             BackupSqlMajorVersion = 0;
             BackupSqlMinorVersion = 0;

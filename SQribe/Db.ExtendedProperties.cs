@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -58,7 +59,7 @@ public class ExtendedProperties : IExtendedProperties
         if (settings.SqlObjects.Contains(",xp,") && settings.Abort == false)
         {
             const string objectName = "extended property";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -69,13 +70,17 @@ public class ExtendedProperties : IExtendedProperties
                 settings.OutputPath + settings.ExtendedPropertiesFilename, 
                 (script, token) => {
 
-                    using (var reader = new DataReader(helpers.LoadScript("select-extended-properties.sql"), settings.DataSource, useRewind: true))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("select-extended-properties.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -86,185 +91,227 @@ public class ExtendedProperties : IExtendedProperties
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
-                                    while (reader.Read() && settings.Abort == false)
+                                    while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
                                         totalCount++;
+
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (reader.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (reader.HasRows)
+                                reader.Close();
+
+                                using (reader.ExecuteReader(cts.Token))
                                 {
-                                    while (reader.Read() && settings.Abort == false)
+                                    if (reader.HasRows)
                                     {
-                                        var skip = true;
-                                        var prop = string.Empty;
-
-                                        currentCount++;
-                                        prop += Constants.LineFeed;
-                                        prop += "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
-                                        prop += "EXEC sp_addextendedproperty @name = N'" + reader["PROPERTY_NAME"] + "'";
-                                        prop += ", @value = N'" + reader["PROPERTY_VALUE"].Replace("'", "''") + "'";
-
-                                        switch (reader.GetValue<int>("CLASS"))
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
-                                            case 0:
-                                                // Database-level property
-                                                skip = false;
+                                            if (settings.Abort)
+                                            {
+                                                cts.Cancel();
                                                 break;
-                                            case 1:
+                                            }
 
-                                                if (reader["OBJECT_NAME"] != string.Empty)
-                                                {
-                                                    prop += ", @level0type = N'Schema'";
-                                                    prop += ", @level0name = N'" + reader["SCHEMA_NAME"] + "'";
+                                            var skip = true;
+                                            var prop = string.Empty;
 
-                                                    switch (reader["OBJECT_TYPE_DESC"])
+                                            currentCount++;
+                                            prop += Constants.LineFeed;
+                                            prop += "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
+                                            prop += "EXEC sp_addextendedproperty @name = N'" +
+                                                    reader.SafeGetString("PROPERTY_NAME") + "'";
+                                            prop += ", @value = N'" +
+                                                    reader.SafeGetString("PROPERTY_VALUE").Replace("'", "''") + "'";
+
+                                            switch (reader.SafeGetInt("CLASS"))
+                                            {
+                                                case 0:
+                                                    // Database-level property
+                                                    skip = false;
+                                                    break;
+                                                case 1:
+
+                                                    if (reader.SafeGetString("OBJECT_NAME") != string.Empty)
                                                     {
-                                                        case "CHECK_CONSTRAINT":
-                                                        case "DEFAULT_CONSTRAINT":
-                                                        case "FOREIGN_KEY_CONSTRAINT":
-                                                        case "PRIMARY_KEY_CONSTRAINT":
-                                                            prop += ", @level1type = N'TABLE'";
-                                                            prop += ", @level1name = N'" + reader["TABLE_NAME"] + "'";
-                                                            prop += ", @level2type = N'CONSTRAINT'";
-                                                            prop += ", @level2name = N'" + reader["OBJECT_NAME"] + "'";
+                                                        prop += ", @level0type = N'Schema'";
+                                                        prop += ", @level0name = N'" +
+                                                                reader.SafeGetString("SCHEMA_NAME") + "'";
+
+                                                        switch (reader.SafeGetString("OBJECT_TYPE_DESC"))
+                                                        {
+                                                            case "CHECK_CONSTRAINT":
+                                                            case "DEFAULT_CONSTRAINT":
+                                                            case "FOREIGN_KEY_CONSTRAINT":
+                                                            case "PRIMARY_KEY_CONSTRAINT":
+                                                                prop += ", @level1type = N'TABLE'";
+                                                                prop += ", @level1name = N'" +
+                                                                        reader.SafeGetString("TABLE_NAME") + "'";
+                                                                prop += ", @level2type = N'CONSTRAINT'";
+                                                                prop += ", @level2name = N'" +
+                                                                        reader.SafeGetString("OBJECT_NAME") + "'";
+                                                                skip = false;
+                                                                break;
+                                                            case "SQL_SCALAR_FUNCTION":
+                                                            case "SQL_TABLE_VALUED_FUNCTION":
+                                                                prop += ", @level1type = N'FUNCTION'";
+                                                                prop += ", @level1name = N'" +
+                                                                        reader.SafeGetString("OBJECT_NAME") + "'";
+                                                                skip = false;
+                                                                break;
+                                                            case "SQL_STORED_PROCEDURE":
+                                                                prop += ", @level1type = N'PROCEDURE'";
+                                                                prop += ", @level1name = N'" +
+                                                                        reader.SafeGetString("OBJECT_NAME") + "'";
+                                                                skip = false;
+                                                                break;
+                                                            case "SQL_TRIGGER":
+                                                                prop += ", @level1type = N'TABLE'";
+                                                                prop += ", @level1name = N'" +
+                                                                        reader.SafeGetString("TABLE_NAME") + "'";
+                                                                prop += ", @level2type = N'TRIGGER'";
+                                                                prop += ", @level2name = N'" +
+                                                                        reader.SafeGetString("OBJECT_NAME") + "'";
+                                                                skip = false;
+                                                                break;
+                                                            case "USER_TABLE":
+                                                                prop += ", @level1type = N'TABLE'";
+                                                                prop += ", @level1name = N'" +
+                                                                        reader.SafeGetString("OBJECT_NAME") + "'";
+
+                                                                if (reader.SafeGetString("COLUMN_NAME") != string.Empty)
+                                                                {
+                                                                    prop += ", @level2type = N'COLUMN'";
+                                                                    prop += ", @level2name = N'" +
+                                                                            reader.SafeGetString("COLUMN_NAME") + "'";
+                                                                }
+
+                                                                skip = false;
+                                                                break;
+                                                            case "VIEW":
+                                                                prop += ", @level1type = N'VIEW'";
+                                                                prop += ", @level1name = N'" +
+                                                                        reader.SafeGetString("OBJECT_NAME") + "'";
+                                                                skip = false;
+                                                                break;
+                                                        }
+                                                    }
+
+                                                    else
+                                                    {
+                                                        if (reader.SafeGetString("OBJECT_NAME") == string.Empty &&
+                                                            reader.SafeGetString("TRIGGER_NAME") != string.Empty)
+                                                        {
+                                                            // Database-level trigger
+                                                            prop += ", @level0type = N'TRIGGER'";
+                                                            prop += ", @level0name = N'" +
+                                                                    reader.SafeGetString("TRIGGER_NAME") + "'";
                                                             skip = false;
-                                                            break;
+                                                        }
+                                                    }
+
+                                                    break;
+                                                case 2:
+                                                    // Parameter
+                                                    prop += ", @level0type = N'Schema'";
+                                                    prop += ", @level0name = N'" + reader.SafeGetString("SCHEMA_NAME") +
+                                                            "'";
+
+                                                    switch (reader.SafeGetString("OBJECT_TYPE_DESC"))
+                                                    {
                                                         case "SQL_SCALAR_FUNCTION":
                                                         case "SQL_TABLE_VALUED_FUNCTION":
                                                             prop += ", @level1type = N'FUNCTION'";
-                                                            prop += ", @level1name = N'" + reader["OBJECT_NAME"] + "'";
+                                                            prop += ", @level1name = N'" +
+                                                                    reader.SafeGetString("OBJECT_NAME") + "'";
                                                             skip = false;
                                                             break;
                                                         case "SQL_STORED_PROCEDURE":
                                                             prop += ", @level1type = N'PROCEDURE'";
-                                                            prop += ", @level1name = N'" + reader["OBJECT_NAME"] + "'";
+                                                            prop += ", @level1name = N'" +
+                                                                    reader.SafeGetString("OBJECT_NAME") + "'";
                                                             skip = false;
                                                             break;
-                                                        case "SQL_TRIGGER":
-                                                            prop += ", @level1type = N'TABLE'";
-                                                            prop += ", @level1name = N'" + reader["TABLE_NAME"] + "'";
-                                                            prop += ", @level2type = N'TRIGGER'";
-                                                            prop += ", @level2name = N'" + reader["OBJECT_NAME"] + "'";
-                                                            skip = false;
-                                                            break;
+                                                    }
+
+                                                    prop += ", @level2type = N'PARAMETER'";
+                                                    prop += ", @level2name = N'" +
+                                                            reader.SafeGetString("PARAMETER_NAME") + "'";
+                                                    break;
+                                                case 3:
+                                                    // Schema
+                                                    prop += ", @level0type = N'Schema'";
+                                                    prop += ", @level0name = N'" +
+                                                            reader.SafeGetString("SCHEMA_OBJECT_NAME") + "'";
+                                                    skip = false;
+                                                    break;
+                                                case 6:
+                                                    // Type
+                                                    prop += ", @level0type = N'Type'";
+                                                    prop += ", @level0name = N'" + reader.SafeGetString("OBJECT_NAME") +
+                                                            "'";
+                                                    skip = false;
+                                                    break;
+                                                case 7:
+                                                    // Index
+                                                    prop += ", @level0type = N'Schema'";
+                                                    prop += ", @level0name = N'" + reader.SafeGetString("SCHEMA_NAME") +
+                                                            "'";
+
+                                                    switch (reader.SafeGetString("OBJECT_TYPE_DESC"))
+                                                    {
                                                         case "USER_TABLE":
                                                             prop += ", @level1type = N'TABLE'";
-                                                            prop += ", @level1name = N'" + reader["OBJECT_NAME"] + "'";
-
-                                                            if (reader["COLUMN_NAME"] != string.Empty)
-                                                            {
-                                                                prop += ", @level2type = N'COLUMN'";
-                                                                prop += ", @level2name = N'" + reader["COLUMN_NAME"] + "'";
-                                                            }
-
                                                             skip = false;
                                                             break;
                                                         case "VIEW":
                                                             prop += ", @level1type = N'VIEW'";
-                                                            prop += ", @level1name = N'" + reader["OBJECT_NAME"] + "'";
                                                             skip = false;
                                                             break;
                                                     }
-                                                }
 
-                                                else
-                                                {
-                                                    if (reader["OBJECT_NAME"] == string.Empty && reader["TRIGGER_NAME"] != string.Empty)
-                                                    {
-                                                        // Database-level trigger
-                                                        prop += ", @level0type = N'TRIGGER'";
-                                                        prop += ", @level0name = N'" + reader["TRIGGER_NAME"] + "'";
-                                                        skip = false;
-                                                    }
-                                                }
-                                                break;
-                                            case 2:
-                                                // Parameter
-                                                prop += ", @level0type = N'Schema'";
-                                                prop += ", @level0name = N'" + reader["SCHEMA_NAME"] + "'";
+                                                    prop += ", @level1name = N'" + reader.SafeGetString("OBJECT_NAME") +
+                                                            "'";
+                                                    prop += ", @level2type = N'INDEX'";
+                                                    prop += ", @level2name = N'" + reader.SafeGetString("INDEX_NAME") +
+                                                            "'";
 
-                                                switch (reader["OBJECT_TYPE_DESC"])
-                                                {
-                                                    case "SQL_SCALAR_FUNCTION":
-                                                    case "SQL_TABLE_VALUED_FUNCTION":
-                                                        prop += ", @level1type = N'FUNCTION'";
-                                                        prop += ", @level1name = N'" + reader["OBJECT_NAME"] + "'";
-                                                        skip = false;
-                                                        break;
-                                                    case "SQL_STORED_PROCEDURE":
-                                                        prop += ", @level1type = N'PROCEDURE'";
-                                                        prop += ", @level1name = N'" + reader["OBJECT_NAME"] + "'";
-                                                        skip = false;
-                                                        break;
-                                                }
+                                                    break;
+                                                case 10:
+                                                    // XML schema collection
+                                                    prop += ", @level0type = N'Schema'";
+                                                    prop += ", @level0name = N'" +
+                                                            reader.SafeGetString("XML_SCHEMA_COLLECTION_SCHEMA_NAME") +
+                                                            "'";
+                                                    prop += ", @level1type = N'XML SCHEMA COLLECTION'";
+                                                    prop += ", @level1name = N'" +
+                                                            reader.SafeGetString("XML_SCHEMA_COLLECTION_NAME") + "'";
+                                                    skip = false;
+                                                    break;
+                                            }
 
-                                                prop += ", @level2type = N'PARAMETER'";
-                                                prop += ", @level2name = N'" + reader["PARAMETER_NAME"] + "'";
-                                                break;
-                                            case 3:
-                                                // Schema
-                                                prop += ", @level0type = N'Schema'";
-                                                prop += ", @level0name = N'" + reader["SCHEMA_OBJECT_NAME"] + "'";
-                                                skip = false;
-                                                break;
-                                            case 6:
-                                                // Type
-                                                prop += ", @level0type = N'Type'";
-                                                prop += ", @level0name = N'" + reader["OBJECT_NAME"] + "'";
-                                                skip = false;
-                                                break;
-                                            case 7:
-                                                // Index
-                                                prop += ", @level0type = N'Schema'";
-                                                prop += ", @level0name = N'" + reader["SCHEMA_NAME"] + "'";
+                                            prop += ";" + Constants.LineFeed;
+                                            prop += "GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed;
 
-                                                switch (reader["OBJECT_TYPE_DESC"])
-                                                {
-                                                    case "USER_TABLE":
-                                                        prop += ", @level1type = N'TABLE'";
-                                                        skip = false;
-                                                        break;
-                                                    case "VIEW":
-                                                        prop += ", @level1type = N'VIEW'";
-                                                        skip = false;
-                                                        break;
-                                                }
+                                            if (skip == false)
+                                            {
+                                                script += prop;
+                                            }
 
-                                                prop += ", @level1name = N'" + reader["OBJECT_NAME"] + "'";
-                                                prop += ", @level2type = N'INDEX'";
-                                                prop += ", @level2name = N'" + reader["INDEX_NAME"] + "'";
-
-                                                break;
-                                            case 10:
-                                                // XML schema collection
-                                                prop += ", @level0type = N'Schema'";
-                                                prop += ", @level0name = N'" + reader["XML_SCHEMA_COLLECTION_SCHEMA_NAME"] + "'";
-                                                prop += ", @level1type = N'XML SCHEMA COLLECTION'";
-                                                prop += ", @level1name = N'" + reader["XML_SCHEMA_COLLECTION_NAME"] + "'";
-                                                skip = false;
-                                                break;
+                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate,
+                                                ref lastTimeUpdate, prefix + " ");
                                         }
-                                            
-                                        prop += ";" + Constants.LineFeed;
-                                        prop += "GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed;
-
-                                        if (skip == false)
-                                        {
-                                            script += prop;
-                                        }
-
-                                        helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
                                     }
                                 }
                             }

@@ -297,16 +297,16 @@ public static class Constants
 	/// <returns>String with the indented arrow</returns>
 	public static string GetIndentationArrow()
 	{
-		var result = Constants.IndentationArrowMac;
+		var result = IndentationArrowMac;
 
-		if (Identify.GetOSPlatform() == OSPlatform.Windows)
+		if (Identify.GetOsPlatform() == OSPlatform.Windows)
 		{
-			result = Constants.IndentationArrow;
+			result = IndentationArrow;
 		}
 
-		if (Identify.GetOSPlatform() == OSPlatform.Linux)
+		if (Identify.GetOsPlatform() == OSPlatform.Linux)
 		{
-			result = Constants.IndentationArrowLinux;
+			result = IndentationArrowLinux;
 		}
 
 		return result;
@@ -318,16 +318,16 @@ public static class Constants
 	/// <returns>String with the arrow</returns>
 	public static string GetArrow()
 	{
-		var result = Constants.ArrowMac;
+		var result = ArrowMac;
 
-		if (Identify.GetOSPlatform() == OSPlatform.Windows)
+		if (Identify.GetOsPlatform() == OSPlatform.Windows)
 		{
-			result = Constants.Arrow;
+			result = Arrow;
 		}
 
-		if (Identify.GetOSPlatform() == OSPlatform.Linux)
+		if (Identify.GetOsPlatform() == OSPlatform.Linux)
 		{
-			result = Constants.ArrowLinux;
+			result = ArrowLinux;
 		}
 
 		return result;
@@ -339,11 +339,11 @@ public static class Constants
 	/// <returns>String with the title bar character</returns>
 	public static string GetHeaderBar()
 	{
-		var result = Constants.HeaderBarMac;
+		var result = HeaderBarMac;
 
-		if (Identify.GetOSPlatform() == OSPlatform.Windows)
+		if (Identify.GetOsPlatform() == OSPlatform.Windows)
 		{
-			result = Constants.HeaderBar;
+			result = HeaderBar;
 		}
 
 		return result;
@@ -355,11 +355,11 @@ public static class Constants
 	/// <returns>String with the vertical bar</returns>
 	public static string GetBar()
 	{
-		var result = Constants.BarMac;
+		var result = BarMac;
 
-		if (Identify.GetOSPlatform() == OSPlatform.Windows)
+		if (Identify.GetOsPlatform() == OSPlatform.Windows)
 		{
-			result = Constants.Bar;
+			result = Bar;
 		}
 
 		return result;

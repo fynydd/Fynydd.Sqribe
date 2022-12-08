@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -69,7 +70,7 @@ public class Tables : ITables
             var script = string.Empty;
             var scriptCC = string.Empty;
             var scriptDV = string.Empty;
-            var objectTypeName = "table definition";
+            const string objectTypeName = "table definition";
             var tableCount = 0;
             var schemaInitScript = helpers.LoadTemplate("init-schemas.sql");
             var outputFilename = settings.TablesFilename;
@@ -87,19 +88,23 @@ public class Tables : ITables
             try
             {
                 var createTemplate = helpers.LoadTemplate("table-create.sql");
-                var prefix = objectTypeName.PluralizeNoun(2).ToUpperFirstCharacter();
+                var prefix = objectTypeName.Pluralize().Humanize(LetterCasing.Sentence);
 
                 File.AppendAllText(settings.OutputPath + outputFilename, schemaInitScript, Encoding.UTF8);
                 File.AppendAllText(settings.OutputPath + settings.TablesComputedColumnsFilename, schemaInitScript, Encoding.UTF8);
                 File.AppendAllText(settings.OutputPath + settings.TableDefaultValuesFilename, schemaInitScript, Encoding.UTF8);
 
-                using (var tables = new DataReader(helpers.LoadScript("select-table-names.sql"), settings.DataSource, useRewind: true))
+                using (var tables = new SqlReader(new SqlReaderConfiguration
+                       {
+                           ConnectionString = settings.DataSource,
+                           CommandText = helpers.LoadScript("select-table-names.sql")
+                       }))
                 {
                     if (settings.Abort == false)
                     {
                         var cts = new CancellationTokenSource();
-                        var task = tables.ExecuteAsync(cts.Token);
-
+                        var task = tables.ExecuteReaderAsync(cts.Token);
+        
                         while (task.IsCompleted == false)
                         {
                             if (settings.Abort)
@@ -110,298 +115,315 @@ public class Tables : ITables
                             Thread.Sleep(Constants.SleepNumber);
                         }
 
-                        if (tables.IsReady)
+                        if (settings.Abort == false)
                         {
                             if (tables.HasRows)
                             {
-                                while (tables.Read() && settings.Abort == false)
+                                while (tables.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                 {
                                     tableCount++;
+
+                                    if (settings.Abort)
+                                    {
+                                        cts.Cancel();
+                                        break;
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if (settings.Abort == false)
-                    {
-                        if (tables.Rewind())
+                        if (settings.Abort == false)
                         {
-                            if (tables.HasRows)
+                            tables.Close();
+
+                            using (tables.ExecuteReader())
                             {
-                                while (tables.Read() && settings.Abort == false)
+                                if (tables.HasRows)
                                 {
-                                    var generatedDefaultValues = string.Empty;
-                                    var generated = createTemplate;
-                                    var generatedColumns = string.Empty;
-                                    var generatedCC = createTemplate;
-                                    var generatedComputedColumns = string.Empty;
-                                    var needsAlter = false;
-                                    var columnTemplate = createTemplate.GetStringRow(" NULL,", Constants.LineFeed);
-
-                                    processedCount++;
-
-                                    generated = generated.Replace("SCHEMA_NAME", tables["SCHEMA_NAME"]);
-                                    generated = generated.Replace("TABLE_NAME", tables["TABLE_NAME"]);
-
-                                    needsAlter = false;
-
-                                    log += Environment.NewLine + "#### [" + tables["SCHEMA_NAME"] + "].[" + tables["TABLE_NAME"] + "]" + Environment.NewLine;
-
-                                    using (var columns = new DataReader(helpers.LoadScript("select-table-column-schema.sql").Replace("{TABLE_NAME}", tables["TABLE_NAME"]).Replace("{SCHEMA_NAME}", tables["SCHEMA_NAME"]), settings.DataSource))
+                                    while (tables.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
-                                        if (settings.Abort == false)
+                                        if (settings.Abort)
                                         {
-                                            var cts2 = new CancellationTokenSource();
-                                            var task2 = columns.ExecuteAsync(cts2.Token);
+                                            cts.Cancel();
+                                            break;
+                                        }
 
-                                            while (task2.IsCompleted == false)
+                                        var generatedDefaultValues = string.Empty;
+                                        var generated = createTemplate;
+                                        var generatedColumns = string.Empty;
+                                        var generatedCC = createTemplate;
+                                        var generatedComputedColumns = string.Empty;
+                                        var needsAlter = false;
+                                        var columnTemplate = createTemplate.GetStringRow(" NULL,", Constants.LineFeed);
+
+                                        processedCount++;
+
+                                        generated = generated.Replace("SCHEMA_NAME", tables.SafeGetString("SCHEMA_NAME"));
+                                        generated = generated.Replace("TABLE_NAME", tables.SafeGetString("TABLE_NAME"));
+
+                                        needsAlter = false;
+
+                                        log += Environment.NewLine + "#### [" + tables.SafeGetString("SCHEMA_NAME") + "].[" + tables.SafeGetString("TABLE_NAME") + "]" + Environment.NewLine;
+
+                                        using (var columns = new SqlReader(new SqlReaderConfiguration
+                                               {
+                                                   ConnectionString = settings.DataSource,
+                                                   CommandText = helpers.LoadScript("select-table-column-schema.sql").Replace("{TABLE_NAME}", tables.SafeGetString("TABLE_NAME")).Replace("{SCHEMA_NAME}", tables.SafeGetString("SCHEMA_NAME"))
+                                               }))
+                                        {
+                                            if (settings.Abort == false)
                                             {
-                                                if (settings.Abort)
+                                                var task2 = columns.ExecuteReaderAsync(cts.Token);
+        
+                                                while (task2.IsCompleted == false)
                                                 {
-                                                    cts2.Cancel();
+                                                    if (settings.Abort)
+                                                    {
+                                                        cts.Cancel();
+                                                    }
+
+                                                    Thread.Sleep(Constants.SleepNumber);
                                                 }
 
-                                                Thread.Sleep(Constants.SleepNumber);
-                                            }
-
-                                            if (columns.IsReady)
-                                            {
-                                                if (columns.HasRows)
+                                                if (settings.Abort == false)
                                                 {
-                                                    var fieldCounter = 1;
-                                                    var rowCount = columns.ReadTable().Rows.Count;
-
-                                                    log += "- Column count: " + rowCount + Environment.NewLine;
-
-                                                    while (columns.Read() && settings.Abort == false)
+                                                    if (columns.HasRows)
                                                     {
-                                                        #region Process columns
+                                                        var fieldCounter = 1;
+                                                        var rowCount = columns.ReadTable().Rows.Count;
 
-                                                        var generatedCol = columnTemplate;
-                                                        var generatedComputedCol = columnTemplate;
-                                                        var dataType = columns["DATA_TYPE"];
-                                                        var colSize = string.Empty;
+                                                        log += "- Column count: " + rowCount + Environment.NewLine;
 
-                                                        if (columns.GetBoolean("IS_COMPUTED") && columns["COMPUTED_VALUE"] != string.Empty)
+                                                        while (columns.Read() && settings.Abort == false)
                                                         {
-                                                            needsAlter = true;
+                                                            #region Process columns
 
-                                                            // Generate placeholder computed column for initial creation
-                                                            generatedCol = generatedCol.Left(generatedCol.IndexOf("[COLUMN_NAME]", StringComparison.Ordinal));
-                                                            generatedCol += "[" + columns["COLUMN_NAME"] + "] AS ('')," + Constants.LineFeed;
+                                                            var generatedCol = columnTemplate;
+                                                            var generatedComputedCol = columnTemplate;
+                                                            var dataType = columns.SafeGetString("DATA_TYPE");
+                                                            var colSize = string.Empty;
 
-                                                            // Generate real computed column for later drop and create
-                                                            generatedComputedCol = generatedComputedCol.Left(generatedComputedCol.IndexOf("[COLUMN_NAME]", StringComparison.Ordinal));
-                                                            generatedComputedCol += "[" + columns["COLUMN_NAME"] + "] AS " + columns["COMPUTED_VALUE"] + (columns.GetBoolean("IS_PERSISTED") ? " PERSISTED" : string.Empty) + "," + Constants.LineFeed;
-
-                                                            if (fieldCounter++ >= rowCount)
+                                                            if (columns.SafeGetBoolean("IS_COMPUTED") && columns.SafeGetString("COMPUTED_VALUE") != string.Empty)
                                                             {
-                                                                generatedCol = generatedCol.Replace("," + Constants.LineFeed, Constants.LineFeed);
-                                                                generatedComputedCol = generatedComputedCol.Replace("," + Constants.LineFeed, Constants.LineFeed);
-                                                            }
-                                                        }
+                                                                needsAlter = true;
 
-                                                        else
-                                                        {
-                                                            generatedCol = generatedCol.Replace("COLUMN_NAME", columns["COLUMN_NAME"]);
+                                                                // Generate placeholder computed column for initial creation
+                                                                generatedCol = generatedCol.Left(generatedCol.IndexOf("[COLUMN_NAME]", StringComparison.Ordinal));
+                                                                generatedCol += "[" + columns.SafeGetString("COLUMN_NAME") + "] AS ('')," + Constants.LineFeed;
 
-                                                            if (string.IsNullOrWhiteSpace(columns["DOMAIN_SCHEMA"]))
-                                                            {
-                                                                if (Constants.SqlSizedTypes.Contains(dataType))
+                                                                // Generate real computed column for later drop and create
+                                                                generatedComputedCol = generatedComputedCol.Left(generatedComputedCol.IndexOf("[COLUMN_NAME]", StringComparison.Ordinal));
+                                                                generatedComputedCol += "[" + columns.SafeGetString("COLUMN_NAME") + "] AS " + columns.SafeGetString("COMPUTED_VALUE") + (columns.SafeGetBoolean("IS_PERSISTED") ? " PERSISTED" : string.Empty) + "," + Constants.LineFeed;
+
+                                                                if (fieldCounter++ >= rowCount)
                                                                 {
-                                                                    var bytes = columns["CHARACTER_MAXIMUM_LENGTH"];
-
-                                                                    switch (dataType.ToLower())
-                                                                    {
-                                                                        case "nvarchar":
-                                                                        case "varbinary":
-                                                                        case "varchar":
-                                                                            if (bytes == "-1")
-                                                                            {
-                                                                                bytes = "max";
-                                                                            }
-                                                                            colSize = @"(" + bytes + @")";
-                                                                            break;
-                                                                        case "datetime2":
-                                                                        case "datetimeoffset":
-                                                                        case "time":
-                                                                            colSize = @"(" + columns["DATETIME_PRECISION"] + @")";
-                                                                            break;
-                                                                        case "decimal":
-                                                                        case "numeric":
-                                                                            colSize = @"(" + columns["NUMERIC_PRECISION"] + @"," + columns["NUMERIC_SCALE"] + @")";
-                                                                            break;
-                                                                        default: 
-                                                                            colSize = @"(" + bytes + @")";
-                                                                            break; 
-                                                                    }
-
-                                                                    dataType = "[" + dataType + "]";
+                                                                    generatedCol = generatedCol.Replace("," + Constants.LineFeed, Constants.LineFeed);
+                                                                    generatedComputedCol = generatedComputedCol.Replace("," + Constants.LineFeed, Constants.LineFeed);
                                                                 }
+                                                            }
 
-                                                                else
+                                                            else
+                                                            {
+                                                                generatedCol = generatedCol.Replace("COLUMN_NAME", columns.SafeGetString("COLUMN_NAME"));
+
+                                                                if (string.IsNullOrWhiteSpace(columns.SafeGetString("DOMAIN_SCHEMA")))
                                                                 {
-                                                                    if (dataType.ToLower() == "xml")
+                                                                    if (Constants.SqlSizedTypes.Contains(dataType))
                                                                     {
-                                                                        if (string.IsNullOrWhiteSpace(columns["XML_SCHEMA_NAME"]) == false && string.IsNullOrWhiteSpace(columns["XML_SCHEMA_COLLECTION_NAME"]) == false)
+                                                                        var bytes = columns.SafeGetString("CHARACTER_MAXIMUM_LENGTH");
+
+                                                                        switch (dataType.ToLower())
                                                                         {
-                                                                            dataType = "[" + dataType + "](CONTENT [" + columns["XML_SCHEMA_NAME"] + "].[" + columns["XML_SCHEMA_COLLECTION_NAME"] + "])";
+                                                                            case "nvarchar":
+                                                                            case "varbinary":
+                                                                            case "varchar":
+                                                                                if (bytes == "-1")
+                                                                                {
+                                                                                    bytes = "max";
+                                                                                }
+                                                                                colSize = @"(" + bytes + @")";
+                                                                                break;
+                                                                            case "datetime2":
+                                                                            case "datetimeoffset":
+                                                                            case "time":
+                                                                                colSize = @"(" + columns.SafeGetString("DATETIME_PRECISION") + @")";
+                                                                                break;
+                                                                            case "decimal":
+                                                                            case "numeric":
+                                                                                colSize = @"(" + columns.SafeGetString("NUMERIC_PRECISION") + @"," + columns.SafeGetString("NUMERIC_SCALE") + @")";
+                                                                                break;
+                                                                            default: 
+                                                                                colSize = @"(" + bytes + @")";
+                                                                                break; 
                                                                         }
+
+                                                                        dataType = "[" + dataType + "]";
                                                                     }
 
                                                                     else
                                                                     {
-                                                                        dataType = "[" + dataType + "]";
-                                                                    }
-                                                                }
+                                                                        if (dataType.ToLower() == "xml")
+                                                                        {
+                                                                            if (string.IsNullOrWhiteSpace(columns.SafeGetString("XML_SCHEMA_NAME")) == false && string.IsNullOrWhiteSpace(columns.SafeGetString("XML_SCHEMA_COLLECTION_NAME")) == false)
+                                                                            {
+                                                                                dataType = "[" + dataType + "](CONTENT [" + columns.SafeGetString("XML_SCHEMA_NAME") + "].[" + columns.SafeGetString("XML_SCHEMA_COLLECTION_NAME") + "])";
+                                                                            }
+                                                                        }
 
-                                                                generatedCol = generatedCol.Replace("[DATA_TYPE]", dataType);
-                                                                generatedCol = generatedCol.Replace("(max)", colSize);
-                                                                    
-                                                                if (string.IsNullOrWhiteSpace(columns["COLLATION_NAME"]) == false)
-                                                                {
-                                                                    generatedCol = generatedCol.Replace("SQL_Latin1_General_CP1_CI_AS", columns["COLLATION_NAME"]);
+                                                                        else
+                                                                        {
+                                                                            dataType = "[" + dataType + "]";
+                                                                        }
+                                                                    }
+
+                                                                    generatedCol = generatedCol.Replace("[DATA_TYPE]", dataType);
+                                                                    generatedCol = generatedCol.Replace("(max)", colSize);
+                                                                        
+                                                                    if (string.IsNullOrWhiteSpace(columns.SafeGetString("COLLATION_NAME")) == false)
+                                                                    {
+                                                                        generatedCol = generatedCol.Replace("SQL_Latin1_General_CP1_CI_AS", columns.SafeGetString("COLLATION_NAME"));
+                                                                    }
+
+                                                                    else
+                                                                    {
+                                                                        generatedCol = generatedCol.Replace(" COLLATE SQL_Latin1_General_CP1_CI_AS", string.Empty);
+                                                                    }
                                                                 }
 
                                                                 else
                                                                 {
+                                                                    // If a UDDT, hijack dataType and colSize to render out the UDDT as [dbo].[name]
+                                                                    generatedCol = generatedCol.Replace("DATA_TYPE", columns.SafeGetString("DOMAIN_SCHEMA"));
+                                                                    generatedCol = generatedCol.Replace("(max)", ".[" + columns.SafeGetString("DOMAIN_NAME") + "]");
                                                                     generatedCol = generatedCol.Replace(" COLLATE SQL_Latin1_General_CP1_CI_AS", string.Empty);
                                                                 }
-                                                            }
 
-                                                            else
-                                                            {
-                                                                // If a UDDT, hijack dataType and colSize to render out the UDDT as [dbo].[name]
-                                                                generatedCol = generatedCol.Replace("DATA_TYPE", columns["DOMAIN_SCHEMA"]);
-                                                                generatedCol = generatedCol.Replace("(max)", ".[" + columns["DOMAIN_NAME"] + "]");
-                                                                generatedCol = generatedCol.Replace(" COLLATE SQL_Latin1_General_CP1_CI_AS", string.Empty);
-                                                            }
-
-                                                            if (string.IsNullOrWhiteSpace(columns["IDENTITY_COLUMN_NAME"]) == false)
-                                                            {
-                                                                generatedCol = generatedCol.Replace("1,1", columns["SEED_VALUE"] + "," + columns["INCREMENT_VALUE"]);
-                                                            }
-
-                                                            else
-                                                            {
-                                                                generatedCol = generatedCol.Replace(" IDENTITY(1,1)", string.Empty);
-                                                            }
-
-                                                            generatedCol = generatedCol.Replace(" NULL,", columns.GetBoolean("IS_ROWGUIDCOL") ? " ROWGUIDCOL NULL," : " NULL,");
-                                                            generatedCol = generatedCol.Replace(" NULL,", (columns.GetBoolean("IS_NULLABLE") ? " NULL," : " NOT NULL,"));
-
-                                                            if (fieldCounter++ >= rowCount)
-                                                            {
-                                                                generatedCol = generatedCol.Replace("," + Constants.LineFeed, Constants.LineFeed);
-                                                            }
-
-                                                            generatedComputedCol = generatedCol;
-                                                        }
-
-                                                        generatedColumns += generatedCol;
-                                                        generatedComputedColumns += generatedComputedCol;
-
-                                                        #endregion
-
-                                                        #region Process column default values
-
-                                                        if (string.IsNullOrWhiteSpace(columns["COLUMN_DEFAULT"]) == false)
-                                                        {
-                                                            if (columns["COLUMN_DEFAULT"].ToUpper().StartsWith("CREATE DEFAULT"))
-                                                            {
-                                                                var defaultName = columns["COLUMN_DEFAULT"].Split("CREATE DEFAULT ")[1];
-                                                                defaultName = defaultName.Split(" AS ")[0];
-
-                                                                if (string.IsNullOrWhiteSpace(defaultName) == false)
+                                                                if (string.IsNullOrWhiteSpace(columns.SafeGetString("IDENTITY_COLUMN_NAME")) == false)
                                                                 {
-                                                                    generatedDefaultValues += helpers.LoadTemplate("bind-default-to-column.sql")
-                                                                        .Replace("DEFAULT_NAME", defaultName)
-                                                                        .Replace("SCHEMA_NAME", tables["SCHEMA_NAME"])
-                                                                        .Replace("TABLE_NAME", tables["TABLE_NAME"])
-                                                                        .Replace("COLUMN_NAME", columns["COLUMN_NAME"]);
+                                                                    generatedCol = generatedCol.Replace("1,1", columns.SafeGetString("SEED_VALUE") + "," + columns.SafeGetString("INCREMENT_VALUE"));
+                                                                }
+
+                                                                else
+                                                                {
+                                                                    generatedCol = generatedCol.Replace(" IDENTITY(1,1)", string.Empty);
+                                                                }
+
+                                                                generatedCol = generatedCol.Replace(" NULL,", columns.SafeGetBoolean("IS_ROWGUIDCOL") ? " ROWGUIDCOL NULL," : " NULL,");
+                                                                generatedCol = generatedCol.Replace(" NULL,", (columns.SafeGetBoolean("IS_NULLABLE") ? " NULL," : " NOT NULL,"));
+
+                                                                if (fieldCounter++ >= rowCount)
+                                                                {
+                                                                    generatedCol = generatedCol.Replace("," + Constants.LineFeed, Constants.LineFeed);
+                                                                }
+
+                                                                generatedComputedCol = generatedCol;
+                                                            }
+
+                                                            generatedColumns += generatedCol;
+                                                            generatedComputedColumns += generatedComputedCol;
+
+                                                            #endregion
+
+                                                            #region Process column default values
+
+                                                            if (string.IsNullOrWhiteSpace(columns.SafeGetString("COLUMN_DEFAULT")) == false)
+                                                            {
+                                                                if (columns.SafeGetString("COLUMN_DEFAULT").ToUpper().StartsWith("CREATE DEFAULT"))
+                                                                {
+                                                                    var defaultName = columns.SafeGetString("COLUMN_DEFAULT").Split("CREATE DEFAULT ")[1];
+                                                                    defaultName = defaultName.Split(" AS ")[0];
+
+                                                                    if (string.IsNullOrWhiteSpace(defaultName) == false)
+                                                                    {
+                                                                        generatedDefaultValues += helpers.LoadTemplate("bind-default-to-column.sql")
+                                                                            .Replace("DEFAULT_NAME", defaultName)
+                                                                            .Replace("SCHEMA_NAME", tables.SafeGetString("SCHEMA_NAME"))
+                                                                            .Replace("TABLE_NAME", tables.SafeGetString("TABLE_NAME"))
+                                                                            .Replace("COLUMN_NAME", columns.SafeGetString("COLUMN_NAME"));
+                                                                    }
+                                                                }
+
+                                                                else
+                                                                {
+                                                                    generatedDefaultValues += helpers.LoadTemplate("alter-table-column-default-value.sql")
+                                                                        .Replace("TABLE_SCHEMA", columns.SafeGetString("TABLE_SCHEMA"))
+                                                                        .Replace("TABLE_NAME", columns.SafeGetString("TABLE_NAME"))
+                                                                        .Replace("COLUMN_NAME", columns.SafeGetString("COLUMN_NAME"))
+                                                                        .Replace("COLUMN_DEFAULT", columns.SafeGetString("COLUMN_DEFAULT"));
                                                                 }
                                                             }
 
-                                                            else
-                                                            {
-                                                                generatedDefaultValues += helpers.LoadTemplate("alter-table-column-default-value.sql")
-                                                                    .Replace("TABLE_SCHEMA", columns["TABLE_SCHEMA"])
-                                                                    .Replace("TABLE_NAME", columns["TABLE_NAME"])
-                                                                    .Replace("COLUMN_NAME", columns["COLUMN_NAME"])
-                                                                    .Replace("COLUMN_DEFAULT", columns["COLUMN_DEFAULT"]);
-                                                            }
+                                                            log += "- [" + columns.SafeGetString("COLUMN_NAME") + "]" + dataType + colSize + Environment.NewLine;
+
+                                                            #endregion
                                                         }
 
-                                                        log += "- [" + columns["COLUMN_NAME"] + "]" + dataType + colSize + Environment.NewLine;
+                                                        if (tables.SafeGetBoolean("TABLE_IS_MEMORY_OPTIMIZED"))
+                                                        {
+                                                            generated = generated.Replace(") ON [PRIMARY] TEXTIMAGE_ON [PRIMARY] -- SQRIBE/END", 
+                                                                ") WITH ( MEMORY_OPTIMIZED = ON, DURABILITY = " + tables.SafeGetString("TABLE_DURABILITY_DESC") + " )");
+                                                        }
 
-                                                        #endregion
-                                                    }
+                                                        else
+                                                        {
+                                                            generated = generated.Replace(" TEXTIMAGE_ON [PRIMARY] -- SQRIBE/END", string.Empty);
+                                                        }
 
-                                                    if (tables.GetBoolean("TABLE_IS_MEMORY_OPTIMIZED"))
-                                                    {
-                                                        generated = generated.Replace(") ON [PRIMARY] TEXTIMAGE_ON [PRIMARY] -- SQRIBE/END", 
-                                                            ") WITH ( MEMORY_OPTIMIZED = ON, DURABILITY = " + tables["TABLE_DURABILITY_DESC"] + " )");
-                                                    }
+                                                        if (needsAlter)
+                                                        {
+                                                            generatedCC = generated.Replace(columnTemplate, generatedComputedColumns);
 
-                                                    else
-                                                    {
-                                                        generated = generated.Replace(" TEXTIMAGE_ON [PRIMARY] -- SQRIBE/END", string.Empty);
-                                                    }
+                                                            generatedCC = Constants.LineFeed + "DROP TABLE [" + tables.SafeGetString("SCHEMA_NAME") + "].[" + tables.SafeGetString("TABLE_NAME") + "];" + Constants.LineFeed
+                                                                          + "GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed
+                                                                          + generatedCC; 
+                                                                
+                                                            scriptCC += generatedCC;
+                                                        }
 
-                                                    if (needsAlter)
-                                                    {
-                                                        generatedCC = generated.Replace(columnTemplate, generatedComputedColumns);
+                                                        generated = generated.Replace(columnTemplate, generatedColumns);
+                                                        script += generated;
 
-                                                        generatedCC = Constants.LineFeed + "DROP TABLE [" + tables["SCHEMA_NAME"] + "].[" + tables["TABLE_NAME"] + "];" + Constants.LineFeed
-                                                                      + "GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed
-                                                                      + generatedCC; 
-                                                            
-                                                        scriptCC += generatedCC;
-                                                    }
-
-                                                    generated = generated.Replace(columnTemplate, generatedColumns);
-                                                    script += generated;
-
-                                                    if (string.IsNullOrWhiteSpace(generatedDefaultValues) == false)
-                                                    {
-                                                        scriptDV += generatedDefaultValues;
+                                                        if (string.IsNullOrWhiteSpace(generatedDefaultValues) == false)
+                                                        {
+                                                            scriptDV += generatedDefaultValues;
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
+
+                                        helpers.ShowPercentageComplete(token, tableCount, processedCount, startDate, ref lastTimeUpdate, prefix + " ");
+
+                                        log += "- Result: DONE" + Environment.NewLine;
                                     }
-
-                                    helpers.ShowPercentageComplete(token, tableCount, processedCount, startDate, ref lastTimeUpdate, prefix + " ");
-
-                                    log += "- Result: DONE" + Environment.NewLine;
                                 }
                             }
                         }
-                    }
-
-                    if (settings.Abort == false)
-                    {
-                        if (processedCount > 0)
+                        
+                        if (settings.Abort == false)
                         {
-                            File.AppendAllText(settings.OutputPath + outputFilename, script, Encoding.UTF8);
-
-                            if (scriptCC != string.Empty)
+                            if (processedCount > 0)
                             {
-                                File.AppendAllText(settings.OutputPath + settings.TablesComputedColumnsFilename, scriptCC, Encoding.UTF8);
+                                File.AppendAllText(settings.OutputPath + outputFilename, script, Encoding.UTF8);
+
+                                if (scriptCC != string.Empty)
+                                {
+                                    File.AppendAllText(settings.OutputPath + settings.TablesComputedColumnsFilename, scriptCC, Encoding.UTF8);
+                                }
+
+                                if (scriptDV != string.Empty)
+                                {
+                                    File.AppendAllText(settings.OutputPath + settings.TableDefaultValuesFilename, scriptDV, Encoding.UTF8);
+                                }
                             }
 
-                            if (scriptDV != string.Empty)
+                            else
                             {
-                                File.AppendAllText(settings.OutputPath + settings.TableDefaultValuesFilename, scriptDV, Encoding.UTF8);
+                                script = string.Empty;
                             }
-                        }
-
-                        else
-                        {
-                            script = string.Empty;
-                        }
-            
-                        output.Write("idle", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode), ephemeral: true);
+                    
+                            output.Write("idle", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode), ephemeral: true);
+                        }                        
                     }
                 }
 

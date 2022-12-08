@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -59,7 +60,7 @@ public class Triggers : ITriggers
         if (settings.SqlObjects.Contains(",tr,") && settings.Abort == false)
         {
             const string objectName = "trigger";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -70,13 +71,17 @@ public class Triggers : ITriggers
                 settings.OutputPath + settings.TriggersFilename, 
                 (script, token) => {
 
-                    using (var reader = new DataReader(helpers.LoadScript("generate-triggers.sql"), settings.DataSource, useRewind: true))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("generate-triggers.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -87,35 +92,50 @@ public class Triggers : ITriggers
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
-                                    while(reader.Read() && settings.Abort == false)
+                                    while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
                                         totalCount++;
+
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (reader.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (reader.HasRows)
+                                reader.Close();
+
+                                using (reader.ExecuteReader())
                                 {
-                                    while(reader.Read() && settings.Abort == false)
+                                    if (reader.HasRows)
                                     {
-                                        var val = reader[0];
-                                        script += val
-                                            .Replace(Constants.LineFeed + Constants.LineFeed + "CREATE TRIGGER", Constants.LineFeed + "CREATE TRIGGER")
-                                            .Replace(Constants.LineFeed + Constants.LineFeed + "END" + Constants.LineFeed, Constants.LineFeed + "END" + Constants.LineFeed)
-                                            .Replace(Constants.LineFeed + Constants.LineFeed + "GO -- SQRIBE/GO", Constants.LineFeed + "GO -- SQRIBE/GO");
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
+                                        {
+                                            if (settings.Abort)
+                                            {
+                                                cts.Cancel();
+                                                break;
+                                            }
 
-                                        currentCount++;
+                                            var val = reader.SafeGetString(0);
 
-                                        helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
+                                            script += val
+                                                .Replace(Constants.LineFeed + Constants.LineFeed + "CREATE TRIGGER", Constants.LineFeed + "CREATE TRIGGER")
+                                                .Replace(Constants.LineFeed + Constants.LineFeed + "END" + Constants.LineFeed, Constants.LineFeed + "END" + Constants.LineFeed)
+                                                .Replace(Constants.LineFeed + Constants.LineFeed + "GO -- SQRIBE/GO", Constants.LineFeed + "GO -- SQRIBE/GO");
+
+                                            currentCount++;
+
+                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
+                                        }
                                     }
                                 }
                             }

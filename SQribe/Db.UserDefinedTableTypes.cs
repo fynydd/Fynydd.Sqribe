@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -59,7 +60,7 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
         if (settings.SqlObjects.Contains(",udtt,") && settings.Abort == false)
         {
             const string objectName = "user-defined table type";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -70,13 +71,17 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
                 settings.OutputPath + settings.UserDefinedTableTypesFilename, 
                 (script, token) => {
 
-                    using (var tables = new DataReader(helpers.LoadScript("select-user-defined-table-names.sql"), settings.DataSource, useRewind: true))
+                    using (var tables = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("select-user-defined-table-names.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = tables.ExecuteAsync(cts.Token);
-
+                            var task = tables.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -87,56 +92,72 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (tables.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (tables.HasRows)
                                 {
-                                    while (tables.Read() && settings.Abort == false)
+                                    while (tables.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
                                         totalCount++;
+
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (tables.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (tables.HasRows)
+                                tables.Close();
+
+                                using (tables.ExecuteReader())
                                 {
-                                    while (tables.Read() && settings.Abort == false)
+                                    if (tables.HasRows)
                                     {
-                                        var primaryKeys = string.Empty;
-                                        var keyType = string.Empty;
-                                        var keySpecs = string.Empty;
-
-                                        currentCount++;
-
-                                        script += helpers.LoadTemplate("print-message.sql").Replace("{MESSAGE}", "Creating user-defined table [" + tables["SCHEMA_NAME"] + "].[" + tables["TABLE_NAME"] + "]");
-                                        script += Constants.LineFeed + "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
-                                        script += @"CREATE TYPE [" + tables["SCHEMA_NAME"] + @"].[" + tables["TABLE_NAME"] + @"] AS TABLE (" + Constants.LineFeed;
-
-                                        using (var columns = new DataReader(helpers.LoadScript("select-user-defined-table-column-schema.sql").Replace("{TABLE_NAME}", tables["TABLE_NAME"]).Replace("{SCHEMA_NAME}", tables["SCHEMA_NAME"]), settings.DataSource))
+                                        while (tables.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
-                                            if (settings.Abort == false)
+                                            if (settings.Abort)
                                             {
-                                                var cts2 = new CancellationTokenSource();
-                                                var task2 = columns.ExecuteAsync(cts2.Token);
+                                                cts.Cancel();
+                                                break;
+                                            }
 
-                                                while (task2.IsCompleted == false)
+                                            var primaryKeys = string.Empty;
+                                            var keyType = string.Empty;
+                                            var keySpecs = string.Empty;
+
+                                            currentCount++;
+
+                                            script += helpers.LoadTemplate("print-message.sql").Replace("{MESSAGE}", "Creating user-defined table [" + tables.SafeGetString("SCHEMA_NAME") + "].[" + tables.SafeGetString("TABLE_NAME") + "]");
+                                            script += Constants.LineFeed + "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
+                                            script += @"CREATE TYPE [" + tables.SafeGetString("SCHEMA_NAME") + @"].[" + tables.SafeGetString("TABLE_NAME") + @"] AS TABLE (" + Constants.LineFeed;
+
+                                            using (var columns = new SqlReader(new SqlReaderConfiguration
+                                                   {
+                                                       ConnectionString = settings.DataSource,
+                                                       CommandText = helpers.LoadScript("select-user-defined-table-column-schema.sql").Replace("{TABLE_NAME}", tables.SafeGetString("TABLE_NAME")).Replace("{SCHEMA_NAME}", tables.SafeGetString("SCHEMA_NAME"))
+                                                   }))
+                                            {
+                                                if (settings.Abort == false)
                                                 {
-                                                    if (settings.Abort)
+                                                    var cts2 = new CancellationTokenSource();
+                                                    var task2 = tables.ExecuteReaderAsync(cts2.Token);
+        
+                                                    while (task2.IsCompleted == false)
                                                     {
-                                                        cts2.Cancel();
+                                                        if (settings.Abort)
+                                                        {
+                                                            cts.Cancel();
+                                                            cts2.Cancel();
+                                                        }
+
+                                                        Thread.Sleep(Constants.SleepNumber);
                                                     }
 
-                                                    Thread.Sleep(Constants.SleepNumber);
-                                                }
-
-                                                if (columns.IsReady)
-                                                {
-                                                    if (columns.HasRows)
+                                                    if (settings.Abort == false)
                                                     {
                                                         if (columns.HasRows)
                                                         {
@@ -145,25 +166,31 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
                                 
                                                             while (columns.Read())
                                                             {
+                                                                if (settings.Abort)
+                                                                {
+                                                                    cts.Cancel();
+                                                                    cts2.Cancel();
+                                                                }
+                                                                
                                                                 if (settings.Abort == false)
                                                                 {
-                                                                    var dataType = columns["DATA_TYPE"];
+                                                                    var dataType = columns.SafeGetString("DATA_TYPE");
                                                                     var identity = string.Empty;
                                                                     var colSize = string.Empty;
 
-                                                                    if (columns.GetBoolean("IS_COMPUTED") && columns["COMPUTED_VALUE"] != string.Empty)
+                                                                    if (columns.SafeGetBoolean("IS_COMPUTED") && columns.SafeGetString("COMPUTED_VALUE") != string.Empty)
                                                                     {
-                                                                        script += @"    [" + columns["COLUMN_NAME"] + "] AS " + columns["COMPUTED_VALUE"];
+                                                                        script += @"    [" + columns.SafeGetString("COLUMN_NAME") + "] AS " + columns.SafeGetString("COMPUTED_VALUE");
                                                                         script += (fieldCounter++ < rowCount || primaryKeys != string.Empty ? "," + Constants.LineFeed : Constants.LineFeed);
                                                                     }
 
                                                                     else
                                                                     {
-                                                                        if (columns["DOMAIN_SCHEMA"] == "sys")
+                                                                        if (columns.SafeGetString("DOMAIN_SCHEMA") == "sys")
                                                                         {
                                                                             if (Constants.SqlSizedTypes.Contains(dataType))
                                                                             {
-                                                                                var bytes = columns["CHARACTER_MAXIMUM_LENGTH"];
+                                                                                var bytes = columns.SafeGetString("CHARACTER_MAXIMUM_LENGTH");
 
                                                                                 switch (dataType.ToLower())
                                                                                 {
@@ -179,11 +206,11 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
                                                                                     case "datetime2":
                                                                                     case "datetimeoffset":
                                                                                     case "time":
-                                                                                        colSize = @"(" + columns["DATETIME_PRECISION"] + @")";
+                                                                                        colSize = @"(" + columns.SafeGetString("DATETIME_PRECISION") + @")";
                                                                                         break;
                                                                                     case "decimal":
                                                                                     case "numeric":
-                                                                                        colSize = @"(" + columns["NUMERIC_PRECISION"] + @"," + columns["NUMERIC_SCALE"] + @")";
+                                                                                        colSize = @"(" + columns.SafeGetString("NUMERIC_PRECISION") + @"," + columns.SafeGetString("NUMERIC_SCALE") + @")";
                                                                                         break;
                                                                                     default: 
                                                                                         colSize = @"(" + bytes + @")";
@@ -197,9 +224,9 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
                                                                             {
                                                                                 if (dataType.ToLower() == "xml")
                                                                                 {
-                                                                                    if (string.IsNullOrWhiteSpace(columns["XML_SCHEMA_NAME"]) == false && string.IsNullOrWhiteSpace(columns["XML_SCHEMA_COLLECTION_NAME"]) == false)
+                                                                                    if (string.IsNullOrWhiteSpace(columns.SafeGetString("XML_SCHEMA_NAME")) == false && string.IsNullOrWhiteSpace(columns.SafeGetString("XML_SCHEMA_COLLECTION_NAME")) == false)
                                                                                     {
-                                                                                        dataType = "[" + dataType + "](CONTENT [" + columns["XML_SCHEMA_NAME"] + "].[" + columns["XML_SCHEMA_COLLECTION_NAME"] + "])";
+                                                                                        dataType = "[" + dataType + "](CONTENT [" + columns.SafeGetString("XML_SCHEMA_NAME") + "].[" + columns.SafeGetString("XML_SCHEMA_COLLECTION_NAME") + "])";
                                                                                     }
                                                                                 }
 
@@ -213,29 +240,29 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
                                                                         else
                                                                         {
                                                                             // If a UDDT, hijack dataType and colSize to render out the UDDT as [dbo].[name]
-                                                                            dataType = "[" + columns["DOMAIN_SCHEMA"] + "]";
-                                                                            colSize = ".[" + columns["DOMAIN_NAME"] + "]";
+                                                                            dataType = "[" + columns.SafeGetString("DOMAIN_SCHEMA") + "]";
+                                                                            colSize = ".[" + columns.SafeGetString("DOMAIN_NAME") + "]";
                                                                         }
 
-                                                                        if (columns.GetBoolean("IS_PRIMARY_KEY"))
+                                                                        if (columns.SafeGetBoolean("IS_PRIMARY_KEY"))
                                                                         {
                                                                             if (primaryKeys != string.Empty)
                                                                             {
                                                                                 primaryKeys += ", ";
                                                                             }
 
-                                                                            primaryKeys += "[" + columns["COLUMN_NAME"] + "] " + (columns.GetBoolean("IS_DESCENDING_KEY") ? "DESC" : string.Empty);
-                                                                            keyType = columns["KEY_TYPE"];
+                                                                            primaryKeys += "[" + columns.SafeGetString("COLUMN_NAME") + "] " + (columns.SafeGetBoolean("IS_DESCENDING_KEY") ? "DESC" : string.Empty);
+                                                                            keyType = columns.SafeGetString("KEY_TYPE");
 
-                                                                            keySpecs += "IGNORE_DUP_KEY = " + (columns.GetBoolean("ignore_dup_key") ? "ON" : "OFF");
+                                                                            keySpecs += "IGNORE_DUP_KEY = " + (columns.SafeGetBoolean("ignore_dup_key") ? "ON" : "OFF");
                                                                         }
 
-                                                                        if (string.IsNullOrWhiteSpace(columns["IDENTITY_COLUMN_NAME"]) == false)
+                                                                        if (string.IsNullOrWhiteSpace(columns.SafeGetString("IDENTITY_COLUMN_NAME")) == false)
                                                                         {
-                                                                            identity = @" IDENTITY(" + columns["SEED_VALUE"] + "," + columns["INCREMENT_VALUE"] + @")";
+                                                                            identity = @" IDENTITY(" + columns.SafeGetString("SEED_VALUE") + "," + columns.SafeGetString("INCREMENT_VALUE") + @")";
                                                                         }
 
-                                                                        script += @"    " + columns["COLUMN_NAME"] + @" " + dataType + colSize + identity + (columns.GetBoolean("IS_NULLABLE") ? " NULL" : " NOT NULL") + (string.IsNullOrWhiteSpace(columns["COLUMN_DEFAULT"]) == false ? " DEFAULT " + columns["COLUMN_DEFAULT"] : string.Empty);
+                                                                        script += @"    " + columns.SafeGetString("COLUMN_NAME") + @" " + dataType + colSize + identity + (columns.SafeGetBoolean("IS_NULLABLE") ? " NULL" : " NOT NULL") + (string.IsNullOrWhiteSpace(columns.SafeGetString("COLUMN_DEFAULT")) == false ? " DEFAULT " + columns.SafeGetString("COLUMN_DEFAULT") : string.Empty);
                                                                         script += (fieldCounter++ < rowCount || primaryKeys != string.Empty ? "," + Constants.LineFeed : Constants.LineFeed);
                                                                     }
                                                                 }
@@ -254,9 +281,9 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
                                                     }
                                                 }
                                             }
-                                        }
 
-                                        helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
+                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
+                                        }
                                     }
                                 }
                             }

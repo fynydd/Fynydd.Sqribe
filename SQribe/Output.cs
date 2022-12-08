@@ -158,7 +158,7 @@ public class Output : IOutput
             _settings = singletonSettings;
 
             // WINDOWS
-            if (Identify.GetOSPlatform() == OSPlatform.Windows)
+            if (Identify.GetOsPlatform() == OSPlatform.Windows)
             {
                 _useAbsoluteLinePos = true;
             }

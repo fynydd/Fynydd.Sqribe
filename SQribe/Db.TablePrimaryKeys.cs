@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -59,7 +60,7 @@ public class TablePrimaryKeys : ITablePrimaryKeys
         if (settings.SqlObjects.Contains(",pkc,") && settings.Abort == false)
         {
             const string objectName = "table primary key constraint";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -70,13 +71,17 @@ public class TablePrimaryKeys : ITablePrimaryKeys
                 settings.OutputPath + settings.TablePrimaryKeysFilename, 
                 (script, token) => {
 
-                    using (var reader = new DataReader(helpers.LoadScript("generate-table-primary-keys.sql"), settings.DataSource, useRewind: true))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("generate-table-primary-keys.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -87,44 +92,58 @@ public class TablePrimaryKeys : ITablePrimaryKeys
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
                                     do
                                     {
-                                        while (reader.Read() && settings.Abort == false)
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
                                             totalCount++;
+                                            
+                                            if (settings.Abort)
+                                            {
+                                                cts.Cancel();
+                                                break;
+                                            }
                                         }
 
                                         Thread.Sleep(Constants.SleepNumber);
 
-                                    } while (reader.NextResult() && settings.Abort == false);
+                                    } while (reader.SqlDataReader!.NextResult() && settings.Abort == false);
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (reader.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (reader.HasRows)
+                                reader.Close();
+
+                                using (reader.ExecuteReader())
                                 {
-                                    do
+                                    if (reader.HasRows)
                                     {
-                                        while (reader.Read() && settings.Abort == false)
+                                        do
                                         {
-                                            script += Constants.LineFeed + reader[0];
+                                            while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
+                                            {
+                                                if (settings.Abort)
+                                                {
+                                                    cts.Cancel();
+                                                    break;
+                                                }
 
-                                            currentCount++;
+                                                script += Constants.LineFeed + reader.SafeGetString(0);
 
-                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
-                                        }
+                                                currentCount++;
 
-                                        Thread.Sleep(Constants.SleepNumber);
+                                                helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
+                                            }
 
-                                    } while (reader.NextResult() && settings.Abort == false);
+                                            Thread.Sleep(Constants.SleepNumber);
+
+                                        } while (reader.SqlDataReader!.NextResult() && settings.Abort == false);
+                                    }
                                 }
                             }
                         }

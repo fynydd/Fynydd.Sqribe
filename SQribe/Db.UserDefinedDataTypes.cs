@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -59,7 +60,7 @@ public class UserDefinedDataTypes : IUserDefinedDataTypes
         if (settings.SqlObjects.Contains(",uddt,") && settings.Abort == false)
         {
             const string objectName = "user-defined data type";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -70,13 +71,17 @@ public class UserDefinedDataTypes : IUserDefinedDataTypes
                 settings.OutputPath + settings.UserDefinedDataTypesFilename, 
                 (script, token) => {
 
-                    using (var reader = new DataReader(helpers.LoadScript("select-user-defined-data-types.sql"), settings.DataSource, useRewind: true))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("select-user-defined-data-types.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -87,90 +92,104 @@ public class UserDefinedDataTypes : IUserDefinedDataTypes
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
-                                    while (reader.Read() && settings.Abort == false)
+                                    while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
                                         totalCount++;
+
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (reader.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (reader.HasRows)
+                                reader.Close();
+
+                                using (reader.ExecuteReader())
                                 {
-                                    while (reader.Read() && settings.Abort == false)
+                                    if (reader.HasRows)
                                     {
-                                        currentCount++;
-
-                                        var dataType = reader["DATA_TYPE"];
-                                        var colSize = string.Empty;
-                                        var bytes = reader["max_length"];
-
-                                        if (Constants.SqlSizedTypes.Contains(dataType))
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
-                                            switch (dataType.ToLower())
+                                            if (settings.Abort)
                                             {
-                                                case "nvarchar":
-                                                case "varbinary":
-                                                case "varchar":
-                                                    if (bytes == "-1")
-                                                    {
-                                                        bytes = "max";
-                                                    }
+                                                cts.Cancel();
+                                                break;
+                                            }
 
-                                                    else
-                                                    {
-                                                        if (dataType.ToLower().StartsWith("n"))
+                                            currentCount++;
+
+                                            var dataType = reader.SafeGetString("DATA_TYPE");
+                                            var colSize = string.Empty;
+                                            var bytes = reader.SafeGetString("max_length");
+
+                                            if (Constants.SqlSizedTypes.Contains(dataType))
+                                            {
+                                                switch (dataType.ToLower())
+                                                {
+                                                    case "nvarchar":
+                                                    case "varbinary":
+                                                    case "varchar":
+                                                        if (bytes == "-1")
                                                         {
-                                                            var sbytes = reader.GetValue<int>("max_length");
-                                                                
-                                                            if (sbytes > 0)
+                                                            bytes = "max";
+                                                        }
+
+                                                        else
+                                                        {
+                                                            if (dataType.ToLower().StartsWith("n"))
                                                             {
-                                                                sbytes = sbytes / 2;
-                                                                bytes = sbytes.ToString();
+                                                                var sbytes = reader.SafeGetInt("max_length");
+                                                                    
+                                                                if (sbytes > 0)
+                                                                {
+                                                                    sbytes = sbytes / 2;
+                                                                    bytes = sbytes.ToString();
+                                                                }
                                                             }
                                                         }
-                                                    }
-                                                    colSize = @"(" + bytes + @")";
-                                                    break;
-                                                case "datetime2":
-                                                case "datetimeoffset":
-                                                case "time":
-                                                    colSize = @"(" + reader["scale"] + @")";
-                                                    break;
-                                                case "decimal":
-                                                case "numeric":
-                                                    colSize = @"(" + reader["precision"] + @"," + reader["scale"] + @")";
-                                                    break;
-                                                default: 
-                                                    colSize = @"(" + bytes + @")";
-                                                    break; 
+                                                        colSize = @"(" + bytes + @")";
+                                                        break;
+                                                    case "datetime2":
+                                                    case "datetimeoffset":
+                                                    case "time":
+                                                        colSize = @"(" + reader.SafeGetString("scale") + @")";
+                                                        break;
+                                                    case "decimal":
+                                                    case "numeric":
+                                                        colSize = @"(" + reader.SafeGetString("precision") + @"," + reader.SafeGetString("scale") + @")";
+                                                        break;
+                                                    default: 
+                                                        colSize = @"(" + bytes + @")";
+                                                        break; 
+                                                }
                                             }
+
+                                            script += Constants.LineFeed + "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
+                                            script += "CREATE TYPE [" + reader.SafeGetString("SCHEMA_NAME") + "].[" + reader.SafeGetString("name") + "] FROM " + dataType + colSize + (reader.SafeGetBoolean("is_nullable") == false ? " NOT NULL" : " NULL") + Constants.LineFeed;
+                                            script += @"GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed;
+
+                                            if (string.IsNullOrWhiteSpace(reader.SafeGetString("DEFAULT_NAME")) == false)
+                                            {
+                                                // CREATE DEFAULT IntDefault AS 420
+                                                var defaultName = reader.SafeGetString("DEFAULT_NAME");
+
+                                                script += helpers.LoadTemplate("bind-default-to-column.sql")
+                                                    .Replace("DEFAULT_NAME", defaultName)
+                                                    .Replace("SCHEMA_NAME.TABLE_NAME", reader.SafeGetString("SCHEMA_NAME"))
+                                                    .Replace("COLUMN_NAME", reader.SafeGetString("name"));
+                                            }
+
+                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
                                         }
-
-                                        script += Constants.LineFeed + "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
-                                        script += "CREATE TYPE [" + reader["SCHEMA_NAME"] + "].[" + reader["name"] + "] FROM " + dataType + colSize + (reader.GetBoolean("is_nullable") == false ? " NOT NULL" : " NULL") + Constants.LineFeed;
-                                        script += @"GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed;
-
-                                        if (string.IsNullOrWhiteSpace(reader["DEFAULT_NAME"]) == false)
-                                        {
-                                            // CREATE DEFAULT IntDefault AS 420
-                                            var defaultName = reader["DEFAULT_NAME"];
-
-                                            script += helpers.LoadTemplate("bind-default-to-column.sql")
-                                                .Replace("DEFAULT_NAME", defaultName)
-                                                .Replace("SCHEMA_NAME.TABLE_NAME", reader["SCHEMA_NAME"])
-                                                .Replace("COLUMN_NAME", reader["name"]);
-                                        }
-
-                                        helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
                                     }
                                 }
                             }

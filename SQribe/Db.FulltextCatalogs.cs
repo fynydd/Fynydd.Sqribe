@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -59,7 +60,7 @@ public class FullTextCatalogs : IFullTextCatalogs
         if (settings.SqlObjects.Contains(",ftc,") && settings.Abort == false)
         {
             const string objectName = "fulltext catalog";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -69,14 +70,18 @@ public class FullTextCatalogs : IFullTextCatalogs
                 objectName, 
                 settings.OutputPath + settings.FulltextCatalogsFilename, 
                 (script, token) => {
-                        
-                    using (var reader = new DataReader(helpers.LoadScript("generate-fulltext-catalogs.sql"), settings.DataSource, useRewind: true))
+
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("generate-fulltext-catalogs.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -87,49 +92,63 @@ public class FullTextCatalogs : IFullTextCatalogs
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
                                     do
                                     {
-                                        while (reader.Read() && settings.Abort == false)
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
                                             totalCount++;
+
+                                            if (settings.Abort)
+                                            {
+                                                cts.Cancel();
+                                                break;
+                                            }
                                         }
 
                                         Thread.Sleep(Constants.SleepNumber);
 
-                                    } while (reader.NextResult() && settings.Abort == false);
+                                    } while (reader.SqlDataReader!.NextResult() && settings.Abort == false);
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (reader.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (reader.HasRows)
-                                {
-                                    do
-                                    {
-                                        while (reader.Read() && settings.Abort == false)
-                                        {
-                                            if (reader[0].StartsWith("CREATE FULLTEXT CATALOG"))
-                                            {
-                                                currentCount++;
+                                reader.Close();
 
-                                                script += "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
+                                using (reader.ExecuteReader(cts.Token))
+                                {
+                                    if (reader.HasRows)
+                                    {
+                                        do
+                                        {
+                                            while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
+                                            {
+                                                if (settings.Abort)
+                                                {
+                                                    cts.Cancel();
+                                                    break;
+                                                }
+
+                                                if (reader.SafeGetString(0).StartsWith("CREATE FULLTEXT CATALOG"))
+                                                {
+                                                    currentCount++;
+
+                                                    script += "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
+                                                }
+
+                                                script += reader.SafeGetString(0) + Constants.LineFeed;
+
+                                                helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
                                             }
 
-                                            script += reader[0] + Constants.LineFeed;
+                                            Thread.Sleep(Constants.SleepNumber);
 
-                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
-                                        }
-
-                                        Thread.Sleep(Constants.SleepNumber);
-
-                                    } while (reader.NextResult() && settings.Abort == false);
+                                        } while (reader.SqlDataReader!.NextResult() && settings.Abort == false);
+                                    }
                                 }
                             }
                         }

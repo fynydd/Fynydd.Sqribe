@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -59,7 +60,7 @@ public class Views : IViews
         if (settings.SqlObjects.Contains(",view,") && settings.Abort == false)
         {
             const string objectName = "view";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -70,13 +71,17 @@ public class Views : IViews
                 settings.OutputPath + settings.ViewsFilename, 
                 (script, token) => {
 
-                    using (var reader = new DataReader(helpers.LoadScript("generate-views.sql"), settings.DataSource, useRewind: true))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("generate-views.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+        
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -87,53 +92,67 @@ public class Views : IViews
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
-                                    while(reader.Read() && settings.Abort == false)
+                                    while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
                                         totalCount++;
+
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (settings.Abort == false)
-                        {
-                            if (reader.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (reader.HasRows)
+                                reader.Close();
+
+                                using (reader.ExecuteReader())
                                 {
-                                    while(reader.Read() && settings.Abort == false)
+                                    if (reader.HasRows)
                                     {
-                                        var val = reader[0];
-
-                                        #region Look for errant XML schema paths and fix
-
-                                        // Prevents XML singleton errors
-                                        if (val.Contains("].ref.value(N'"))
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
-                                            var pattern = @"\]\.ref\.value\(N'.*?(?<!\])',";
-                                            var regEx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.IgnorePatternWhitespace);
-                                            var matches = regEx.Matches(val);
-
-                                            foreach (var match in matches)
+                                            if (settings.Abort)
                                             {
-                                                var matchStr = match.ToString();
-                                                
-                                                if (matchStr != null)
-                                                    val = val.Replace(matchStr, matchStr.Left(matchStr.Length - 2) + "[1]',");
+                                                cts.Cancel();
+                                                break;
                                             }
+
+                                            var val = reader.SafeGetString(0);
+
+                                            #region Look for errant XML schema paths and fix
+
+                                            // Prevents XML singleton errors
+                                            if (val.Contains("].ref.value(N'"))
+                                            {
+                                                const string pattern = @"\]\.ref\.value\(N'.*?(?<!\])',";
+                                                var regEx = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.IgnorePatternWhitespace);
+                                                var matches = regEx.Matches(val);
+
+                                                foreach (var match in matches)
+                                                {
+                                                    var matchStr = match.ToString();
+                                                
+                                                    if (matchStr != null)
+                                                        val = val.Replace(matchStr, matchStr.Left(matchStr.Length - 2) + "[1]',");
+                                                }
+                                            }
+
+                                            #endregion
+
+                                            script += val;
+
+                                            currentCount++;
+
+                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
                                         }
-
-                                        #endregion
-
-                                        script += val;
-
-                                        currentCount++;
-
-                                        helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate, ref lastTimeUpdate, prefix + " ");
                                     }
                                 }
                             }

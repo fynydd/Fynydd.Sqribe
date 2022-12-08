@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -58,7 +59,7 @@ public class DefaultTypes : IDefaultTypes
         if (settings.SqlObjects.Contains(",dt,") && settings.Abort == false)
         {
             const string objectName = "default type";
-            var prefix = objectName.PluralizeNoun(2).ToUpperFirstCharacter();
+            var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
             var currentCount = 0;
@@ -69,15 +70,17 @@ public class DefaultTypes : IDefaultTypes
                 settings.OutputPath + settings.DefaultTypesFilename,
                 (script, token) =>
                 {
-
-                    using (var reader = new DataReader(helpers.LoadScript("select-type-default-create-scripts.sql"),
-                               settings.DataSource, useRewind: true))
+                    using (var reader = new SqlReader(new SqlReaderConfiguration
+                           {
+                               ConnectionString = settings.DataSource,
+                               CommandText = helpers.LoadScript("select-type-default-create-scripts.sql")
+                           }))
                     {
                         if (settings.Abort == false)
                         {
                             var cts = new CancellationTokenSource();
-                            var task = reader.ExecuteAsync(cts.Token);
-
+                            var task = reader.ExecuteReaderAsync(cts.Token);
+                            
                             while (task.IsCompleted == false)
                             {
                                 if (settings.Abort)
@@ -88,32 +91,50 @@ public class DefaultTypes : IDefaultTypes
                                 Thread.Sleep(Constants.SleepNumber);
                             }
 
-                            if (reader.IsReady)
+                            if (settings.Abort == false)
                             {
                                 if (reader.HasRows)
                                 {
-                                    while (reader.Read() && settings.Abort == false)
+                                    while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                     {
                                         totalCount++;
+
+                                        if (settings.Abort)
+                                        {
+                                            cts.Cancel();
+                                            break;
+                                        }
                                     }
                                 }
                             }
 
-                            if (reader.Rewind())
+                            if (settings.Abort == false)
                             {
-                                if (reader.HasRows)
-                                {
-                                    while (reader.Read() && settings.Abort == false)
-                                    {
-                                        currentCount++;
-                                        script += Constants.LineFeed;
-                                        script += "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
-                                        script += reader["CREATE_SCRIPT"].TrimEnd(new[] {'\n'}).TrimEnd(new[] {'\r'}) +
-                                                  Constants.LineFeed;
-                                        script += "GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed;
+                                reader.Close();
 
-                                        helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate,
-                                            ref lastTimeUpdate, prefix + " ");
+                                using (reader.ExecuteReader())
+                                {
+                                    if (reader.HasRows)
+                                    {
+                                        while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
+                                        {
+                                            if (settings.Abort)
+                                            {
+                                                cts.Cancel();
+                                                break;
+                                            }
+
+                                            currentCount++;
+                                            script += Constants.LineFeed;
+                                            script += "-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed;
+                                            script += reader.SafeGetString("CREATE_SCRIPT").TrimEnd(new[] {'\n'})
+                                                          .TrimEnd(new[] {'\r'}) +
+                                                      Constants.LineFeed;
+                                            script += "GO -- SQRIBE/GO;" + settings.Hash + Constants.LineFeed;
+
+                                            helpers.ShowPercentageComplete(token, currentCount, totalCount, startDate,
+                                                ref lastTimeUpdate, prefix + " ");
+                                        }
                                     }
                                 }
                             }

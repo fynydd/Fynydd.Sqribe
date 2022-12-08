@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Humanizer;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -180,7 +181,7 @@ public class App
         bool terminateKeyThread = false;
         var originalOutputEncoding = Console.OutputEncoding;
 
-        if (Identify.GetOSPlatform() == OSPlatform.Windows)
+        if (Identify.GetOsPlatform() == OSPlatform.Windows)
         {
 #pragma warning disable CA1416 // Validate platform compatibility
             Console.SetBufferSize(Console.BufferWidth, short.MaxValue - 1);
@@ -286,7 +287,7 @@ public class App
         settings.Log("# JOB SUMMARY");
 
         // ReSharper disable once ConvertIfStatementToSwitchStatement
-        if (settings.Abort == false && settings.Warnings == false)
+        if (settings is {Abort: false, Warnings: false})
         {
             if (settings.Mode != Constants.OperationModes.Help && settings.Mode != Constants.OperationModes.Version)
             {
@@ -296,7 +297,7 @@ public class App
             }
         }
 
-        else if (settings.Abort == false && settings.Warnings)
+        else if (settings is {Abort: false, Warnings: true})
         {
             if (settings.Mode != Constants.OperationModes.Help && settings.Mode != Constants.OperationModes.Version)
             {
@@ -599,13 +600,17 @@ public class App
                                 output.Write("Permissions", token);
                                 output.WriteArrow(token);
 
-                                using (var reader = new DataReader(helpers.LoadScript("select-permissions.sql"), settings.DataSource))
+                                using (var reader = new SqlReader(new SqlReaderConfiguration
+                                       {
+                                           ConnectionString = settings.DataSource,
+                                           CommandText = helpers.LoadScript("select-permissions.sql")
+                                       }))
                                 {
                                     if (settings.Abort == false)
                                     {
                                         var ctsP = new CancellationTokenSource();
-                                        var taskP = reader.ExecuteAsync(ctsP.Token);
-
+                                        var taskP = reader.ExecuteReaderAsync(ctsP.Token);
+        
                                         while (taskP.IsCompleted == false)
                                         {
                                             if (settings.Abort)
@@ -616,15 +621,21 @@ public class App
                                             Thread.Sleep(Constants.SleepNumber);
                                         }
 
-                                        if (reader.IsReady)
+                                        if (settings.Abort == false)
                                         {
                                             if (reader.HasRows)
                                             {
-                                                while (reader.Read() && settings.Abort == false)
+                                                while (reader.ReadAsync(ctsP.Token).GetAwaiter().GetResult())
                                                 {
+                                                    if (settings.Abort)
+                                                    {
+                                                        ctsP.Cancel();
+                                                        break;
+                                                    }
+
                                                     foreach (var permission in permissionsToCheck)
                                                     {
-                                                        if (reader["permission_name"].ToUpper() == permission)
+                                                        if (reader.SafeGetString("permission_name").ToUpper() == permission)
                                                         {
                                                             foundPermissions.Add(permission);
 
@@ -636,8 +647,9 @@ public class App
                                         }
                                     }
                                 }
+                                
 
-                                if (foundPermissions.Count() < permissionsToCheck.Count())
+                                if (foundPermissions.Count < permissionsToCheck.Length)
                                 {
                                     var missingPermissions = string.Empty;
 
@@ -887,7 +899,7 @@ public class App
 
                         var divider = "☰";
 
-                        if (Identify.GetOSPlatform() == OSPlatform.Windows)
+                        if (Identify.GetOsPlatform() == OSPlatform.Windows)
                         {
                             divider = "■";
                         }
@@ -933,7 +945,7 @@ public class App
             var token = output.GetNewToken();
 
             output.WriteLine (string.Empty, token);
-            output.WriteLine("SQRIBE for SQL Server " + settings.Version + " for " + Identify.GetOSPlatformName() + " " + Identify.GetPlatformArchitecture() + " (CLR " + Identify.GetRuntimeVersion() + ")", token);
+            output.WriteLine("SQRIBE for SQL Server " + settings.Version + " for " + Identify.GetOsPlatformName() + " " + Identify.GetPlatformArchitecture() + " (CLR " + Identify.GetRuntimeVersion() + ")", token);
             output.WriteLine (string.Empty, token);
             output.WriteLine("For more info, run: sqribe help", token);
             output.WriteLine (string.Empty, token);
@@ -970,7 +982,7 @@ public class App
             output.WriteBar(token);
             output.Write("  " + settings.ServerName.ToUpper() + "," + settings.PortNumber, token);
             output.WriteArrow(token);
-            output.WriteLine(settings.DatabaseName + " (" + settings.MaxThreadCount + " " + "thread".PluralizeNoun(settings.MaxThreadCount) + ")", token);
+            output.WriteLine(settings.DatabaseName + " (" + settings.MaxThreadCount + " " + (settings.MaxThreadCount == 1 ? "thread" : "thread".Pluralize()) + ")", token);
 
             output.WriteLine (string.Empty, token);
             output.Write("  Output  ", token);
@@ -1143,12 +1155,12 @@ public class App
 
                     output.UnclaimAllThreadTokens();
 
-                    counter = calls.Count();
+                    counter = calls.Length;
                     output.Write(counter.ToString("#,##0") + " left", groupToken, (int)Constants.GetColor("busy", settings.ConsoleDarkMode), ephemeral: true);
 
-                    foreach (Action a in calls) {
+                    foreach (var a in calls) {
 
-                        Thread t = new Thread ( () => {
+                        var t = new Thread ( () => {
 
                             a();
                         })
@@ -1233,7 +1245,7 @@ public class App
 
                     TableData.GenerateInsertScripts(groupToken);
 
-                    if (settings.ChunkData && settings.Abort == false)
+                    if (settings is {ChunkData: true, Abort: false})
                     {
                         TableData.ChunkFiles();
                     }
@@ -1282,9 +1294,10 @@ public class App
 
             if (settings.BackupTimestamp.IsDate())
             {
+                // Wed-Dec-07-2022 @ 5:28PM
                 var timestamp = DateTime.Parse(settings.BackupTimestamp);
                 output.Write("             ", token);
-                output.WriteLine(" " + Constants.GetIndentationArrow() + "Backup on " + timestamp.ToLocalTime().DateFormat(DateFormats.AbbreviatedFull) + " @ " + timestamp.ToLocalTime().TimeFormat(TimeFormats.Standard), token);
+                output.WriteLine(" " + Constants.GetIndentationArrow() + "Backup on " + $"{timestamp.ToLocalTime():ddd-MMM-dd-yyyy} @ {timestamp.ToLocalTime():h:mmtt}", token);
             }
 
             if (settings.BackupSqlMajorVersion > 0)
@@ -1307,7 +1320,7 @@ public class App
             output.WriteBar(token);
             output.Write("  " + settings.ServerName.ToUpper() + "," + settings.PortNumber, token);
             output.WriteArrow(token);
-            output.WriteLine(settings.DatabaseName + " (" + settings.MaxThreadCount + " " + "thread".PluralizeNoun(settings.MaxThreadCount) + ")", token);
+            output.WriteLine(settings.DatabaseName + " (" + settings.MaxThreadCount + " " + (settings.MaxThreadCount == 1 ? "thread" : "thread".Pluralize()) + ")", token);
 
             if (settings.EraseDatabase)
             {
@@ -1363,86 +1376,83 @@ public class App
 
                 #region Erase database
 
-                if (settings.Abort == false)
+                if (settings is {Abort: false, EraseDatabase: true})
                 {
-                    if (settings.EraseDatabase)
-                    {
-                        settings.Log("## ERASE DATABASE");
+                    settings.Log("## ERASE DATABASE");
 
-                        settings.Log("- Set single user mode...");
-                        helpers.Exec(helpers.LoadScript("set-single-user-mode.sql"), token, showProgress: false, prefix: string.Empty, ignoreErrors: true);
+                    settings.Log("- Set single user mode...");
+                    helpers.Exec(helpers.LoadScript("set-single-user-mode.sql"), token, showProgress: false, prefix: string.Empty, ignoreErrors: true);
 
-                        output.WriteBullet(token);
-                        output.WriteLine("Dropping selected database objects" + Constants.Ellipsis, token);
+                    output.WriteBullet(token);
+                    output.WriteLine("Dropping selected database objects" + Constants.Ellipsis, token);
 
-                        settings.Log("- Dropping extended properties...");
-                        ExtendedProperties.DropAll(token);
+                    settings.Log("- Dropping extended properties...");
+                    ExtendedProperties.DropAll(token);
 
-                        settings.Log("- Dropping triggers...");
-                        Triggers.DropAll(token);
+                    settings.Log("- Dropping triggers...");
+                    Triggers.DropAll(token);
 							
-                        settings.Log("- Dropping table foreign keys...");
-                        TableForeignKeys.DropAll(token);
+                    settings.Log("- Dropping table foreign keys...");
+                    TableForeignKeys.DropAll(token);
 
-                        settings.Log("- Dropping full text catalogs...");
-                        FullTextCatalogs.DropAll(token);
+                    settings.Log("- Dropping full text catalogs...");
+                    FullTextCatalogs.DropAll(token);
 
-                        settings.Log("- Dropping table indexes...");
-                        TableIndexes.DropAll(token);
+                    settings.Log("- Dropping table indexes...");
+                    TableIndexes.DropAll(token);
 
-                        settings.Log("- Dropping triggers...");
-                        TableCheckConstraints.DropAll(token);
+                    settings.Log("- Dropping triggers...");
+                    TableCheckConstraints.DropAll(token);
 
-                        settings.Log("- Dropping views...");
-                        Views.DropAll(token);
+                    settings.Log("- Dropping views...");
+                    Views.DropAll(token);
 
-                        settings.Log("- Dropping stored procedures...");
-                        StoredProcedures.DropAll(token);
+                    settings.Log("- Dropping stored procedures...");
+                    StoredProcedures.DropAll(token);
 
-                        settings.Log("- Dropping table primary keys...");
-                        TablePrimaryKeys.DropAll(token);
+                    settings.Log("- Dropping table primary keys...");
+                    TablePrimaryKeys.DropAll(token);
 
-                        settings.Log("- Dropping tables...");
-                        Tables.DropAll(token);
+                    settings.Log("- Dropping tables...");
+                    Tables.DropAll(token);
 
-                        settings.Log("- Dropping user-defined table types...");
-                        UserDefinedTableTypes.DropAll(token);
+                    settings.Log("- Dropping user-defined table types...");
+                    UserDefinedTableTypes.DropAll(token);
 
-                        settings.Log("- Dropping user-defined data types...");
-                        UserDefinedDataTypes.DropAll(token);
+                    settings.Log("- Dropping user-defined data types...");
+                    UserDefinedDataTypes.DropAll(token);
 
-                        settings.Log("- Dropping user-defined functions...");
-                        UserDefinedFunctions.DropAll(token);
+                    settings.Log("- Dropping user-defined functions...");
+                    UserDefinedFunctions.DropAll(token);
 
-                        settings.Log("- Dropping XML schema collections...");
-                        XmlSchemaCollections.DropAll(token);
+                    settings.Log("- Dropping XML schema collections...");
+                    XmlSchemaCollections.DropAll(token);
 
-                        settings.Log("- Dropping schemas...");
-                        Schemas.DropAll(token);
+                    settings.Log("- Dropping schemas...");
+                    Schemas.DropAll(token);
 
-                        settings.Log("- Dropping default types...");
-                        DefaultTypes.DropAll(token);
+                    settings.Log("- Dropping default types...");
+                    DefaultTypes.DropAll(token);
 
-                        settings.Log("- Setting multi-user mode...");
-                        helpers.Exec(helpers.LoadScript("set-multi-user-mode.sql"), token, showProgress: false, prefix: string.Empty, ignoreErrors: true);
+                    settings.Log("- Setting multi-user mode...");
+                    helpers.Exec(helpers.LoadScript("set-multi-user-mode.sql"), token, showProgress: false, prefix: string.Empty, ignoreErrors: true);
 
-                        if (settings.Abort == false)
-                        {
-                            output.WriteIndentationArrow(token);
-                            output.WriteLine("DONE", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
-                            output.WriteLine (string.Empty, token);
+                    if (settings.Abort == false)
+                    {
+                        output.WriteIndentationArrow(token);
+                        output.WriteLine("DONE", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
+                        output.WriteLine (string.Empty, token);
 
-                            settings.Log("### Result: DONE");
-                        }
+                        settings.Log("### Result: DONE");
+                    }
 
-                        else
-                        {
-                            output.WriteIndentationArrow(token);
-                            output.WriteLine("ABORTED", token, (int)Constants.GetColor("error", settings.ConsoleDarkMode));
-                            output.WriteLine (string.Empty, token);
+                    else
+                    {
+                        output.WriteIndentationArrow(token);
+                        output.WriteLine("ABORTED", token, (int)Constants.GetColor("error", settings.ConsoleDarkMode));
+                        output.WriteLine (string.Empty, token);
 
-                            settings.Log("### Result: ABORTED");
-                        }
+                        settings.Log("### Result: ABORTED");
                     }
                 }
 
