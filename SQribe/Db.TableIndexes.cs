@@ -59,7 +59,7 @@ public class TableIndexes : ITableIndexes
     {
         if (settings.SqlObjects.Contains(",index,") && settings.Abort == false)
         {
-            const string objectName = "table index";
+            const string objectName = "table and view index";
             var prefix = objectName.Pluralize().Humanize(LetterCasing.Sentence);
             var startDate = DateTime.Now;
             var lastTimeUpdate = string.Empty;
