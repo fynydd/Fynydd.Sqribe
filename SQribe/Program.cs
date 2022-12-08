@@ -1398,7 +1398,7 @@ public class App
                     settings.Log("- Dropping full text catalogs...");
                     FullTextCatalogs.DropAll(token);
 
-                    settings.Log("- Dropping table indexes...");
+                    settings.Log("- Dropping indexes...");
                     TableIndexes.DropAll(token);
 
                     settings.Log("- Dropping triggers...");

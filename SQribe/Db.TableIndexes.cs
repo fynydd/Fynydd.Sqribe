@@ -153,7 +153,7 @@ public class TableIndexes : ITableIndexes
             token, 
             ",index,", 
             settings.ScriptPath + settings.TableIndexesFilename, 
-            "table index", 
+            "index", 
             "drops" + Path.DirectorySeparatorChar + "drop-indexes.sql"
         );
     }
