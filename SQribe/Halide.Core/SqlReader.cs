@@ -39,11 +39,13 @@ public sealed class SqlReader: IDisposable
 	private SqlConnection? SqlConnection { get; }
 	private SqlCommand? SqlCommand { get; }
 	public SqlDataReader? SqlDataReader { get; set; }
+	private string ConnectionString { get; } 
 	
 	public SqlReader(SqlReaderConfiguration config)
 	{
 		SqlConnection = new SqlConnection(config.ConnectionString);
 		SqlCommand = new SqlCommand();
+		ConnectionString = config.ConnectionString;
 
 		try
 		{
@@ -130,23 +132,23 @@ public sealed class SqlReader: IDisposable
 	/// <returns>DataTable object</returns>
 	public DataTable ReadTable(bool addBlank = false)
 	{
-		var outp = new DataTable();
+		var dataTable = new DataTable();
 
 		try
 		{
-			using (var con = new SqlConnection(SqlConnection!.ConnectionString))
+			using (var con = new SqlConnection(ConnectionString))
 			{
 				using (var da = new SqlDataAdapter(SqlCommand!.CommandText, con))
 				{
 					con.Open();
-					da.Fill(outp);
+					da.Fill(dataTable);
 				}
 			}
 
 			if (addBlank)
 			{
-				var drow = outp.NewRow();
-				outp.Rows.InsertAt(drow, 0);
+				var drow = dataTable.NewRow();
+				dataTable.Rows.InsertAt(drow, 0);
 			}
 		}
 
@@ -155,7 +157,7 @@ public sealed class SqlReader: IDisposable
 			// ignored
 		}
 
-		return outp;
+		return dataTable;
 	}
 	
 	#endregion

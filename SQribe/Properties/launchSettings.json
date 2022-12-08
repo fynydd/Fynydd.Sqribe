@@ -3,6 +3,7 @@
     "sqribe": {
       "commandName": "Project",
       "commandLineArgs": "backup /data_source:\"Server=sqlserver,1433;Initial Catalog=athepedia;user id=sa;password='P@ssw0rdz!'\" /output_path:\"/Users/magic/Projects/athepedia-api/Database\" /max_thread_count:8 /confirm_start:false",
+      "xxxcommandLineArgs": "restore /data_source:\"Server=sqlserver,1433;Initial Catalog=athepedia;user id=sa;password='P@ssw0rdz!'\" /script_path:\"/Users/magic/Projects/athepedia-api/Database\" /max_thread_count:8 /confirm_start:false",
       "workingDirectory": "/Users/magic/Projects/sqribe-github/SQribe"
     }
   }
