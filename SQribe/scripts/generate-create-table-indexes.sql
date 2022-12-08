@@ -3,7 +3,8 @@ CREATE TABLE #Results
     [SCHEMA_NAME] nvarchar(4000),
     [TABLE_NAME] nvarchar(4000),
     [Indexname] nvarchar(4000),
-    [CreateIndex] nvarchar(max)
+    [CreateIndex] nvarchar(max),
+    [IsPrimaryXml] int
 );
 
 declare @SchemaName varchar(100)
@@ -17,13 +18,15 @@ declare @is_disabled varchar(100)
 declare @IndexOptions varchar(max)
 declare @IndexColumnId int
 declare @IsDescendingKey int 
+declare @IsPrimaryXml int 
 declare @IsIncludedColumn int
 declare @TSQLScripCreationIndex varchar(max)
 declare @TSQLScripDisableIndex varchar(max)
 
 declare CursorIndex cursor for
 select schema_name(t.schema_id) [schema_name], t.name, ix.name,
-    case when ix.is_unique = 1 then 'UNIQUE ' else '' END
+        case when xi.xml_index_type <> 0 AND ix.is_unique = 1 then 'UNIQUE ' else '' END +
+        case when xi.xml_index_type = 0 then 'PRIMARY ' else '' END
      , ix.type_desc, '' +
                      CASE when ix.type_desc LIKE '%CLUSTERED COLUMNSTORE' THEN
                                   'COMPRESSION_DELAY=' + CAST(ix.compression_delay AS varchar(255))
@@ -36,15 +39,16 @@ select schema_name(t.schema_id) [schema_name], t.name, ix.name,
                                   + case when ix.compression_delay is not null then ('COMPRESSION_DELAY=' + CAST(ix.compression_delay AS varchar(255)) + ', ') else '' end
                                   + 'SORT_IN_TEMPDB=OFF, FILLFACTOR=' + CONVERT(VARCHAR(5), CASE WHEN ix.fill_factor = 0 THEN 100 ELSE ix.fill_factor END)
                          END AS IndexOptions
-     , ix.is_disabled , FILEGROUP_NAME(ix.data_space_id) FileGroupName
+     , ix.is_disabled , FILEGROUP_NAME(ix.data_space_id) FileGroupName, xi.xml_index_type
 from sys.tables t
          inner join sys.indexes ix on t.object_id=ix.object_id
+         left join sys.xml_indexes xi on xi.name=ix.name
 where ix.type>0 and ix.is_primary_key=0 and ix.is_unique_constraint=0 --and schema_name(tb.schema_id)= @SchemaName and tb.name=@TableName
   and t.is_ms_shipped=0 and t.name<>'sysdiagrams'
 order by schema_name(t.schema_id), t.name, ix.name
 
     open CursorIndex
-fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName
+fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName, @IsPrimaryXml
 
     while (@@fetch_status=0)
 begin
@@ -71,7 +75,7 @@ order by ixc.index_column_id
 begin
 
   if @IsIncludedColumn=0 
-   set @IndexColumns=@IndexColumns + '[' + @ColumnName + ']'  + case when @IsDescendingKey=1  then ' DESC, ' else  ' ASC, ' end
+   set @IndexColumns=@IndexColumns + '[' + @ColumnName + ']'  + case when @IsDescendingKey=1 AND @IsPrimaryXml IS NULL then ' DESC, ' else case when @IsPrimaryXml IS NULL then  ' ASC, ' else ', ' end end
   else 
    set @IncludedColumns=@IncludedColumns + '[' + @ColumnName + '], ' 
 
@@ -90,7 +94,7 @@ close CursorIndexColumn
  set @TSQLScripCreationIndex =''
  set @TSQLScripDisableIndex =''
  set @TSQLScripCreationIndex='CREATE '+ @is_unique  +@IndexTypeDesc + ' INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName)+ IIF(LEN(@IndexColumns) > 1, ' ('+@IndexColumns+') ', '')+ 
-  case when len(@IncludedColumns)>0 then CHAR(13) +'INCLUDE (' + @IncludedColumns+ ')' else '' end + CHAR(13)+'WITH (' + @IndexOptions+ ') ON ' + QUOTENAME(@FileGroupName) + ';'
+  case when len(@IncludedColumns)>0 then CHAR(13) +'INCLUDE (' + @IncludedColumns+ ')' else '' end + CHAR(13)+'WITH (' + @IndexOptions+ ')' + case when @IsPrimaryXml IS NULL then ' ON ' + QUOTENAME(@FileGroupName) + ';' else ';' end
 
  if @is_disabled=1 
   set  @TSQLScripDisableIndex=  CHAR(13) +'ALTER INDEX ' +QUOTENAME(@IndexName) + ' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) + ' DISABLE;' + CHAR(13) 
@@ -104,11 +108,11 @@ if @IndexTypeDesc = 'NONCLUSTERED COLUMNSTORE' begin
 end
 
 INSERT INTO #Results
-([SCHEMA_NAME], [TABLE_NAME], [IndexName], [CreateIndex])
+([SCHEMA_NAME], [TABLE_NAME], [IndexName], [CreateIndex], [IsPrimaryXml])
 VALUES
-    (@SchemaName, @TableName, @IndexName, @TSQLScripCreationIndex + CHAR(13) + CHAR(10) + @TSQLScripDisableIndex + CHAR(13) + CHAR(10) + 'GO -- SQRIBE/GO' + CHAR(13) + CHAR(10))
+    (@SchemaName, @TableName, @IndexName, @TSQLScripCreationIndex + CHAR(13) + CHAR(10) + @TSQLScripDisableIndex + CHAR(13) + CHAR(10) + 'GO -- SQRIBE/GO' + CHAR(13) + CHAR(10), @IsPrimaryXml)
 
-    fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName
+    fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName, @IsPrimaryXml
 
 end
 close CursorIndex
