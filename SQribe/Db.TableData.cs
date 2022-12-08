@@ -31,7 +31,7 @@ public class DataThreadParams
 {
     public string schemaName { get; set; }
     public string tableName { get; set; }
-    public int rowCount { get; set; }
+    public long rowCount { get; set; }
     public int level { get; set; }
     public int tableCount { get; set; }
     public long token { get; set; }
@@ -257,7 +257,7 @@ public class TableData : ITableData
                                         p.schemaName = tables.SafeGetString("SCHEMA_NAME");
                                         p.tableName = tables.SafeGetString("TABLE_NAME");
                                         level = p.level = tables.SafeGetInt("LEVEL");
-                                        p.rowCount = tables.SafeGetInt("ROW_COUNT");
+                                        p.rowCount = tables.SafeGetLong("ROW_COUNT");
                                         p.token = _token;
                                         p.groupToken = groupToken;
 
