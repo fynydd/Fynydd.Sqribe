@@ -40,3 +40,5 @@ msbuild.wrn
 /SQribe/.idea
 .idea
 publish/
+/SQribe/restore-test.sh
+/SQribe/backup-test.sh
