@@ -57,7 +57,7 @@ Click to watch the video
 
 ### Backup Job Video
 
-[<img src="https://sqribe.app/images/sqribe-backup.jpg" width="50%">](https://youtu.be/RX8z1pqYovo)  
+[<img src="https://sqribe.app/images/sqribe-backup.jpg" width="50%">](https://youtu.be/Zm6H1YiCHE8)  
 Click to watch the video
 
 ### Restore Job Video
