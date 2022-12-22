@@ -118,7 +118,7 @@ public class TableData : ITableData
             {
                 // Need to generate a string like this: geography::STPointFromText('POINT(-90.098244 38.862309)', 4326)
                 var geography = SqlGeography.Deserialize(sqlDataReader.GetSqlBytes(index));
-                return $"geography::STPointFromText('POINT({geography.Long} {geography.Lat})', 4326)";
+                return $"geography::STPointFromText('POINT({geography.Long} {geography.Lat})', {geography.STSrid})";
             }
 
             if (column.DataType == typeof(SqlGeometry))
@@ -130,7 +130,6 @@ public class TableData : ITableData
             if (column.DataTypeName?.EndsWith("hierarchyid", StringComparison.InvariantCultureIgnoreCase) ?? false)
             {
                 // Need to generate a string like this: /1/2/
-
                 var hierarchyId = sqlDataReader.GetFieldValue<SqlHierarchyId>(index);
                 return $"'{hierarchyId}'";
             }
