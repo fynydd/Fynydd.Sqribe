@@ -164,15 +164,17 @@ public class TableData : ITableData
             
             if (column.DataType == typeof (byte[]))
             {
-                if (column.DataTypeName?.Equals("timestamp", StringComparison.InvariantCultureIgnoreCase) ?? false)
-                    return "NULL";
+                var dataType = column.DataTypeName ?? "varbinary(max)";
 
+                if (dataType.Equals("binary", StringComparison.InvariantCultureIgnoreCase) || dataType.Equals("varbinary", StringComparison.InvariantCultureIgnoreCase))
+                    dataType += $"({(column.ColumnSize is null or int.MaxValue ? "max": column.ColumnSize):N0})";
+                
                 var bytes = sqlDataReader.GetSqlBytes(index);
 
                 if (bytes.Length == 0)
-                    return "CONVERT(varbinary(max),'0x')";
+                    return $"convert({dataType},'0x',1)";
 
-                return $"CONVERT(varbinary(max), '0x{Convert.ToHexString(bytes.Value)}')";
+                return $"convert({dataType}, '0x{Convert.ToHexString(bytes.Value)}',1)";
             }        
             
             return $"{(new [] { "nchar", "ntext", "nvarchar" }.Contains(column.DataTypeName?.ToLower()) ? "N" : string.Empty)}'{sqlDataReader.GetValue(index).ToString()?.Replace("'", "''")}'";
