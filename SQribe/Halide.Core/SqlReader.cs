@@ -3,9 +3,9 @@
 
 using System;
 using System.Data;
-using System.Data.SqlClient;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 
 namespace SQribe.Halide.Core;
 
@@ -43,9 +43,14 @@ public sealed class SqlReader: IDisposable
 	
 	public SqlReader(SqlReaderConfiguration config)
 	{
-		SqlConnection = new SqlConnection(config.ConnectionString);
+		var builder = new SqlConnectionStringBuilder(config.ConnectionString)
+		{
+			TrustServerCertificate = true
+		};
+
+		ConnectionString = builder.ToString();
+		SqlConnection = new SqlConnection(ConnectionString);
 		SqlCommand = new SqlCommand();
-		ConnectionString = config.ConnectionString;
 
 		try
 		{

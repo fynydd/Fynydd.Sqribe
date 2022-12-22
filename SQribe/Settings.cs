@@ -3,11 +3,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Runtime.InteropServices;
+using Microsoft.Data.SqlClient;
 using Newtonsoft.Json.Linq;
 using SQribe.Halide.Core;
 
@@ -1015,7 +1015,12 @@ internal class Settings : ISettings
 
                 timer.Start();
 
-                cn.ConnectionString = DataSource;
+                var builder = new SqlConnectionStringBuilder(DataSource)
+                {
+                    TrustServerCertificate = true
+                };
+                
+                cn.ConnectionString = builder.ToString();
 
                 var task2 = cn.OpenAsync();
 

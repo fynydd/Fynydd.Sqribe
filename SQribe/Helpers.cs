@@ -4,13 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Humanizer;
+using Microsoft.Data.SqlClient;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -802,7 +802,12 @@ public class Helpers : IHelpers
 
             try
             {
-                using (var cn = new SqlConnection(settings.DataSource))
+                var builder = new SqlConnectionStringBuilder(settings.DataSource)
+                {
+                    TrustServerCertificate = true
+                };
+                
+                using (var cn = new SqlConnection(builder.ToString()))
                 {
                     cn.Open();
 
@@ -1105,7 +1110,12 @@ public class Helpers : IHelpers
                             script = script.Replace("-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed + Constants.LineFeed, string.Empty);
                             script = script.Replace("-- SQRIBE/OBJ;" + settings.Hash + Constants.LineFeed, string.Empty);
 
-                            using (var cn = new SqlConnection(settings.DataSource))
+                            var builder = new SqlConnectionStringBuilder(settings.DataSource)
+                            {
+                                TrustServerCertificate = true
+                            };
+                            
+                            using (var cn = new SqlConnection(builder.ToString()))
                             {
                                 cn.Open();
 

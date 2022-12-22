@@ -2,8 +2,8 @@
   "profiles": {
     "sqribe": {
       "commandName": "Project",
-      "commandLineArgs": "",
-      "workingDirectory": ""
+      "commandLineArgs": "backup /data_source:\"Server=10.1.10.3,1433;Initial Catalog=AdventureWorks2019;user id=sa;password='P@ssw0rdz!'\" /output_path:\"/Users/magic/Desktop/Database\" /max_thread_count:1 /confirm_start:false /turbo_mode:true",
+      "workingDirectory": "/Users/magic/Projects/sqribe-github/SQribe"
     }
   }
 }

@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -14,6 +13,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Humanizer;
+using Microsoft.Data.SqlClient;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -438,7 +438,12 @@ public class App
         {
             using (var cn = new SqlConnection())
             {
-                cn.ConnectionString = settings.DataSource;
+                var builder = new SqlConnectionStringBuilder(settings.DataSource)
+                {
+                    TrustServerCertificate = true
+                };
+
+                cn.ConnectionString = builder.ToString();
 
                 output.WriteBullet(token);
                 output.Write("Checking network", token);

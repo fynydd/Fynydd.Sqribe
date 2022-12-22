@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.SqlClient;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 
 namespace SQribe.Halide.Core;
 
@@ -52,7 +52,12 @@ public sealed class Sql
 {
 	public static void Execute(SqlExecuteSettings sqlExecuteSettings)
 	{
-		using (var sqlConnection = new SqlConnection(sqlExecuteSettings.ConnectionString))
+		var builder = new SqlConnectionStringBuilder(sqlExecuteSettings.ConnectionString)
+		{
+			TrustServerCertificate = true
+		};
+
+		using (var sqlConnection = new SqlConnection(builder.ToString()))
 		{
 			using (var sqlCmd = new SqlCommand())
 			{
@@ -94,7 +99,12 @@ public sealed class Sql
 	
 	public static async Task ExecuteAsync(SqlExecuteSettings sqlExecuteSettings)
 	{
-		await using (var sqlConnection = new SqlConnection(sqlExecuteSettings.ConnectionString))
+		var builder = new SqlConnectionStringBuilder(sqlExecuteSettings.ConnectionString)
+		{
+			TrustServerCertificate = true
+		};
+		
+		await using (var sqlConnection = new SqlConnection(builder.ToString()))
 		{
 			await using (var sqlCmd = new SqlCommand())
 			{

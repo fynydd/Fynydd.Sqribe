@@ -4,13 +4,17 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Data.SqlClient;
+using System.Collections.ObjectModel;
+using System.Data.Common;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using Humanizer;
+using Microsoft.Data.SqlClient;
+using Microsoft.SqlServer.Types;
 using SQribe.Halide.Core;
 
 namespace SQribe;
@@ -103,6 +107,84 @@ public class TableData : ITableData
         counter = 0;
     }
 
+    private static string GetInsertValue(DbColumn column, SqlDataReader sqlDataReader, int index)
+    {
+        if (sqlDataReader.IsDBNull(index))
+            return "null";
+
+        try
+        {
+            if (column.DataType == typeof(SqlGeography))
+            {
+                // Need to generate a string like this: geography::STPointFromText('POINT(-90.098244 38.862309)', 4326)
+                var geography = SqlGeography.Deserialize(sqlDataReader.GetSqlBytes(index));
+                return $"geography::STPointFromText('POINT({geography.Long} {geography.Lat})', 4326)";
+            }
+
+            if (column.DataType == typeof(SqlGeometry))
+            {
+                var geometry = SqlGeometry.Deserialize(sqlDataReader.GetSqlBytes(index));
+                return $"{geometry}";
+            }
+            
+            if (column.DataTypeName?.EndsWith("hierarchyid", StringComparison.InvariantCultureIgnoreCase) ?? false)
+            {
+                // Need to generate a string like this: /1/2/
+
+                var hierarchyId = sqlDataReader.GetFieldValue<SqlHierarchyId>(index);
+                return $"'{hierarchyId}'";
+            }
+
+            if (column.DataType == typeof (short))
+                return sqlDataReader.GetInt16(index).ToString();
+            
+            if (column.DataType == typeof (int))
+                return sqlDataReader.GetInt32(index).ToString();
+
+            if (column.DataType == typeof (long))
+                return sqlDataReader.GetInt64(index).ToString();
+            
+            if (column.DataType == typeof (decimal))
+                return sqlDataReader.GetDecimal(index).ToString(CultureInfo.InvariantCulture);
+
+            if (column.DataType == typeof (float))
+                return sqlDataReader.GetFloat(index).ToString(CultureInfo.InvariantCulture);
+            
+            if (column.DataType == typeof (double))
+                return sqlDataReader.GetDouble(index).ToString(CultureInfo.InvariantCulture);
+
+            if (column.DataType == typeof (DateTimeOffset))
+                return $"'{sqlDataReader.GetDateTimeOffset(index):o}'";
+            
+            if (column.DataType == typeof (DateTime))
+                return $"'{sqlDataReader.GetDateTime(index):yyyy-MM-dd HH:mm:ss.fff}'";
+            
+            if (column.DataType == typeof (bool))
+                return sqlDataReader.GetBoolean(index) ? "1" : "0";
+            
+            if (column.DataType == typeof (byte[]))
+            {
+                if (column.DataTypeName?.Equals("timestamp", StringComparison.InvariantCultureIgnoreCase) ?? false)
+                    return "NULL";
+
+                var bytes = sqlDataReader.GetSqlBytes(index);
+
+                if (bytes.Length == 0)
+                    return "CONVERT(varbinary(max),'0x')";
+
+                return $"CONVERT(varbinary(max), '0x{Convert.ToHexString(bytes.Value)}')";
+            }        
+            
+            return $"{(new [] { "nchar", "ntext", "nvarchar" }.Contains(column.DataTypeName?.ToLower()) ? "N" : string.Empty)}'{sqlDataReader.GetValue(index).ToString()?.Replace("'", "''")}'";
+        }
+
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+    }
+    
     #region Backup methods
 
     /// <summary>
@@ -456,19 +538,16 @@ public class TableData : ITableData
                         }
                     }
 
-                    var procedureScript = helpers.LoadScript("generate-data-inserts.sql").Replace("{SCHEMA_NAME}", p.schemaName).Replace("{TABLE_NAME}", p.tableName).Replace("'{ORDER_BY}'", (string.IsNullOrEmpty(orderBy) ? "NULL" : "'" + orderBy + "'")).Replace("\n", Constants.LineFeed);
-
-                    procedureScript = procedureScript.Replace("-- SQRIBE/INSERT", "-- SQRIBE/INSERT;" + settings.Hash);
-                    procedureScript = procedureScript.Replace("-- SQRIBE/GO", "-- SQRIBE/GO;" + settings.Hash);
+                    #region New Local Processing
 
                     var totalProcessed = 0;
-
+                    
                     if (settings.Abort == false)
                     {
                         using (var reader = new SqlReader(new SqlReaderConfiguration
                                {
                                    ConnectionString = settings.DataSource,
-                                   CommandText = procedureScript
+                                   CommandText = $"select all * from [{p.schemaName}].[{p.tableName}]{(string.IsNullOrEmpty(orderBy) ? string.Empty : $" order by {orderBy}")}"
                                }))
                         {
                             if (settings.Abort == false)
@@ -477,7 +556,7 @@ public class TableData : ITableData
                                 var task = reader.ExecuteReaderAsync(cts.Token);
                                 var startDate = DateTime.Now;
                                 var lastTimeUpdate = string.Empty;
-        
+
                                 while (task.IsCompleted == false)
                                 {
                                     if (settings.Abort)
@@ -486,7 +565,7 @@ public class TableData : ITableData
                                     }
 
                                     helpers.ShowElapsedTime(_token, startDate, ref lastTimeUpdate, p.schemaName + "." + p.tableName + (settings.TurboMode == false ? " [L" + p.level + "]" : string.Empty) + Constants.GetArrow() + "Querying (", ")");
-                                    
+
                                     Thread.Sleep(Constants.SleepNumber);
                                 }
 
@@ -511,6 +590,8 @@ public class TableData : ITableData
 
                                         var goRowCount = 1000; // 1,000 rows per GO (or file write max of 100mb)
                                         var goInterval = 0;
+                                        var statementPrefix = string.Empty;
+                                        var dbColumns = new ReadOnlyCollection<DbColumn>(new List<DbColumn>());
                                         
                                         while (reader.ReadAsync(cts.Token).GetAwaiter().GetResult())
                                         {
@@ -520,9 +601,41 @@ public class TableData : ITableData
                                                 break;
                                             }
 
-                                            var st = reader.SafeGetString(0) + Constants.LineFeed;
+                                            if (string.IsNullOrEmpty(statementPrefix))
+                                            {
+                                                var columnNames = new List<string>();
 
-                                            scrSql.Append(st.Replace("CONVERT(varbinary(max),''", "CONVERT(varbinary(max),'0x'"));
+                                                dbColumns = reader.SqlDataReader?.GetColumnSchema() ??
+                                                            new ReadOnlyCollection<DbColumn>(new List<DbColumn>());
+
+                                                foreach (var column in dbColumns)
+                                                {
+                                                    if ((column.IsReadOnly ?? false) && (column.IsIdentity ?? false) == false)
+                                                        continue;
+
+                                                    columnNames.Add(column.ColumnName);
+                                                }
+
+                                                statementPrefix = $"INSERT INTO [{p.schemaName}].[{p.tableName}] ([{string.Join("],[", columnNames)}]) VALUES (";
+                                            }
+                                            
+                                            var values = new StringBuilder();
+                                            var index = -1;
+                                            
+                                            foreach (var column in dbColumns)
+                                            {
+                                                index++;
+
+                                                if ((column.IsReadOnly ?? false) && (column.IsIdentity ?? false) == false)
+                                                    continue;
+
+                                                if (values.Length > 0)
+                                                    values.Append(',');
+
+                                                values.Append(GetInsertValue(column, reader.SqlDataReader!, index));
+                                            }
+
+                                            scrSql.Append($"-- SQRIBE/INSERT;{settings.Hash}" + Constants.LineFeed + statementPrefix + values + ");" + Constants.LineFeed);
 
                                             totalProcessed++;
 
@@ -670,6 +783,8 @@ public class TableData : ITableData
 
                         log += "- Result: ABORTED" + Environment.NewLine;
                     }
+
+                    #endregion
                 }
 
                 else
@@ -1299,7 +1414,12 @@ public class TableData : ITableData
 
                     if (settings.Abort == false)
                     {
-                        using (SqlConnection cn = new SqlConnection(settings.DataSource))
+                        var builder = new SqlConnectionStringBuilder(settings.DataSource)
+                        {
+                            TrustServerCertificate = true
+                        };
+                        
+                        using (SqlConnection cn = new SqlConnection(builder.ToString()))
                         {
                             var fo = new FileInfo(filePath);
                             var totalBytes = fo.Length;
