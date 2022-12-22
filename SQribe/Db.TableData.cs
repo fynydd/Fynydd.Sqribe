@@ -109,7 +109,10 @@ public class TableData : ITableData
 
     private static string GetInsertValue(DbColumn column, SqlDataReader sqlDataReader, int index)
     {
-        if (sqlDataReader.IsDBNull(index))
+        if ((column.AllowDBNull ?? true) == false && sqlDataReader.IsDBNull(index))
+            throw new Exception($"[{column.BaseSchemaName}].[{column.BaseTableName}].[{column.ColumnName}] has a null value but does not accept null values");
+
+        if ((column.AllowDBNull ?? true) && sqlDataReader.IsDBNull(index))
             return "null";
 
         try
