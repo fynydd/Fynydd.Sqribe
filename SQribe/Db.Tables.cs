@@ -114,7 +114,7 @@ public class Tables : ITables
 
                             Thread.Sleep(Constants.SleepNumber);
                         }
-
+                        
                         if (settings.Abort == false)
                         {
                             if (tables.HasRows)
@@ -136,6 +136,57 @@ public class Tables : ITables
                         {
                             tables.Close();
 
+                            #region Experimental SMO generation  
+                            
+                            // Add nuget dependency:
+                            // <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="170.8.0" />
+                            
+                            // var builder = new SqlConnectionStringBuilder(settings.DataSource)
+                            // {
+                            //     TrustServerCertificate = true
+                            // };
+                            //
+                            // helpers.ShowPercentageComplete(token, tableCount, 0, startDate, ref lastTimeUpdate, prefix + " ");
+                            //
+                            // var sqlConnection = new SqlConnection(builder.ToString());
+                            // var serverConnection = new ServerConnection(sqlConnection); 
+                            // var server = new Server(serverConnection);
+                            // var scripter = new Scripter(server)
+                            // {
+                            //     Options = new ScriptingOptions
+                            //     {
+                            //         ExtendedProperties = false,
+                            //         WithDependencies = false,
+                            //         AllowSystemObjects = false
+                            //     }
+                            // };
+                            //
+                            // var tableList = new List<Table>();
+                            //
+                            // foreach (Table table in server.Databases[settings.DatabaseName].Tables)
+                            // {
+                            //     tableList.Clear();
+                            //     tableList.Add(table);
+                            //
+                            //     var tableScripts = Constants.LineFeed + $"-- SQRIBE/OBJ;{settings.Hash}" + Constants.LineFeed + 
+                            //         string.Join(Constants.LineFeed + $"GO -- SQRIBE/OBJ;{settings.Hash}" + Constants.LineFeed + Constants.LineFeed + $"-- SQRIBE/OBJ;{settings.Hash}" + Constants.LineFeed, scripter.EnumScript(tableList.ToArray())
+                            //         .ToList()
+                            //         //.Where(s => s.StartsWith("CREATE", StringComparison.InvariantCultureIgnoreCase))
+                            //         .Select(s => s.ToString())) + Constants.LineFeed + $"GO -- SQRIBE/OBJ;{settings.Hash}" + Constants.LineFeed + Constants.LineFeed;
+                            //
+                            //     script += tableScripts;
+                            //
+                            //     processedCount++;
+                            //     
+                            //     helpers.ShowPercentageComplete(token, tableCount, processedCount, startDate, ref lastTimeUpdate, prefix + " ");
+                            // }
+                            //
+                            // helpers.ShowPercentageComplete(token, tableCount, processedCount, startDate, ref lastTimeUpdate, prefix + " ");
+                            //
+                            // log += "- Result: DONE" + Environment.NewLine;
+                            
+                            #endregion
+                            
                             using (tables.ExecuteReader())
                             {
                                 if (tables.HasRows)
