@@ -42,3 +42,4 @@ msbuild.wrn
 publish/
 /SQribe/restore-test.sh
 /SQribe/backup-test.sh
+/SQribe/Database/
