@@ -39,7 +39,7 @@ public sealed class SqlReader: IDisposable
 	private SqlConnection? SqlConnection { get; }
 	private SqlCommand? SqlCommand { get; }
 	public SqlDataReader? SqlDataReader { get; set; }
-	private string ConnectionString { get; } 
+	public string ConnectionString { get; } 
 	
 	public SqlReader(SqlReaderConfiguration config)
 	{
