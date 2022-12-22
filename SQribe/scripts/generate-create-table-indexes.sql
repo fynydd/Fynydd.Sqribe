@@ -30,9 +30,9 @@ declare @TSQLScripCreationIndex varchar(max)
 declare @TSQLScripDisableIndex varchar(max)
 
 declare CursorIndex cursor for
-select schema_name(t.schema_id) [schema_name], t.name, ix.name,
+select schema_name(t.schema_id) [schema_name], t.name, ix.name as 'index_name',
         case when xi.xml_index_type IS NULL AND ix.is_unique = 1 then 'UNIQUE ' else '' END +
-        case when xi.xml_index_type = 0 then 'PRIMARY ' else '' END
+            case when xi.xml_index_type = 0 then 'PRIMARY ' else '' END as 'index_type'
      , ix.type_desc, '' +
                      CASE when ix.type_desc LIKE '%CLUSTERED COLUMNSTORE' THEN
                                   'COMPRESSION_DELAY=' + CAST(ix.compression_delay AS varchar(255))
@@ -45,17 +45,17 @@ select schema_name(t.schema_id) [schema_name], t.name, ix.name,
                                   + case when ix.compression_delay is not null then ('COMPRESSION_DELAY=' + CAST(ix.compression_delay AS varchar(255)) + ', ') else '' end
                                   + 'SORT_IN_TEMPDB=OFF, FILLFACTOR=' + CONVERT(VARCHAR(5), CASE WHEN ix.fill_factor = 0 THEN 100 ELSE ix.fill_factor END)
                          END AS IndexOptions
-     , ix.is_disabled , FILEGROUP_NAME(ix.data_space_id) FileGroupName, xi.xml_index_type, xi.using_xml_index_id, xi2.name, xi.secondary_type_desc
+     , ix.is_disabled, FILEGROUP_NAME(ix.data_space_id) FileGroupName, xi.xml_index_type, xi.using_xml_index_id, xi2.name as 'xml_index_name', xi.secondary_type_desc
 from sys.tables t
          inner join sys.indexes ix on t.object_id=ix.object_id
          left join sys.xml_indexes xi on xi.name=ix.name
          left join sys.xml_indexes xi2 on xi2.index_id=xi.using_xml_index_id and xi2.object_id=xi.object_id
-where ix.type>0 and ix.is_primary_key=0 and ix.is_unique_constraint=0 --and schema_name(tb.schema_id)= @SchemaName and tb.name=@TableName
-  and t.is_ms_shipped=0 and t.name<>'sysdiagrams'
+where ix.type>0 and ix.is_primary_key=0 and ix.is_unique_constraint=0
+  and t.is_ms_shipped=0 and t.name<>'sysdiagrams' and ix.data_space_id < 32768
 order by schema_name(t.schema_id), t.name, ix.name
 
     open CursorIndex
-fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
+fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions, @is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
 
     while (@@fetch_status=0)
 begin
@@ -121,7 +121,7 @@ INSERT INTO #Results
 VALUES
     (@SchemaName, @TableName, @IndexName, @TSQLScripCreationIndex + CHAR(13) + CHAR(10) + @TSQLScripDisableIndex + CHAR(13) + CHAR(10) + 'GO -- SQRIBE/GO' + CHAR(13) + CHAR(10), @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc)
 
-    fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
+    fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions, @is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
 end
 
 
