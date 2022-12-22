@@ -540,7 +540,7 @@ public class Helpers : IHelpers
     /// <param name="block">Function block to execute, which returns a tuple with processedCount and the modified script (e.g. "() => { return Tuple.Create(script, counter, token); }")</param>
     /// <param name="counter">Integer for remaining item count in overall batch</param>
     /// <param name="total">Integer for total item count in overall batch</param>
-    /// <param name="groupztoken">Output token for the grouup header, so remaining and total can be updated on-screen</param>
+    /// <param name="groupToken">Output token for the grouup header, so remaining and total can be updated on-screen</param>
     public void GenerateCreateScript(string objectName, string schemaScriptPath, Func<string, long, Tuple<string, int>> block, ref int counter, ref int total, long groupToken)
     {
         var script = string.Empty;
