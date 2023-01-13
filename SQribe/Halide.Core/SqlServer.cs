@@ -18,7 +18,7 @@ namespace SQribe.Halide.Core;
 /// <code>
 /// try
 /// {
-///     Sql.Execute(new SqlExecuteSettings
+///     SqlServer.Execute(new SqlExecuteSettings
 ///     {
 ///         ConnectionString = sqlConnectionString,
 ///         CommandText = commandText
@@ -35,7 +35,7 @@ namespace SQribe.Halide.Core;
 /// <code>
 /// try
 /// {
-///     await Sql.ExecuteAsync(new SqlExecuteSettings
+///     await SqlServer.ExecuteAsync(new SqlExecuteSettings
 ///     {
 ///         ConnectionString = sqlConnectionString,
 ///         CommandText = commandText
@@ -48,7 +48,7 @@ namespace SQribe.Halide.Core;
 /// }
 /// </code>
 /// </example>
-public sealed class Sql
+public sealed class SqlServer
 {
 	public static void Execute(SqlExecuteSettings sqlExecuteSettings)
 	{
