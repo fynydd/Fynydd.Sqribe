@@ -72,7 +72,7 @@ The repository includes:
 1. This README file
 2. SQribe LICENSE
 3. SQribe Visual Studio 2019 solution
-4. SQribe .NET 5.0 project
+4. SQribe .NET 7.0 project
 5. SQribe macOS installer
 6. SQribe Wix installer
 7. Script files to build and publish SQribe
