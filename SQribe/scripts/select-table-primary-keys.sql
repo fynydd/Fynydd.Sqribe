@@ -4,7 +4,7 @@
 SELECT
     schema_name(t.schema_id) AS [SCHEMA_NAME],
     t.name AS [TABLE_NAME],
-    COL_NAME(ic.OBJECT_ID,ic.column_id) AS [COLUMN_NAME],
+    COL_NAME(ic.object_id,ic.column_id) AS [COLUMN_NAME],
     i.name AS [CONSTRAINT_NAME],
     his.total_bucket_count AS [BUCKET_COUNT],
     i.type_desc AS [TYPE_DESC],
@@ -18,7 +18,7 @@ SELECT
 	(SELECT CASE idc.name WHEN NULL THEN 0 ELSE 1 END) AS [is_identity]
 FROM sys.tables t
     LEFT OUTER JOIN sys.indexes AS i on t.object_id=i.object_id
-    LEFT OUTER JOIN sys.index_columns AS ic ON  i.OBJECT_ID = ic.OBJECT_ID AND i.index_id = ic.index_id
+    LEFT OUTER JOIN sys.index_columns AS ic ON  i.object_id = ic.object_id AND i.index_id = ic.index_id
     LEFT OUTER JOIN (
 		SELECT *
 		FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
@@ -27,9 +27,9 @@ FROM sys.tables t
 		SELECT *
 		FROM sys.dm_db_xtp_hash_index_stats
 	) his ON his.object_id = i.object_id AND his.index_id = i.index_id
-	LEFT OUTER JOIN SYS.IDENTITY_COLUMNS idc ON idc.OBJECT_ID = t.object_id
+	LEFT OUTER JOIN sys.identity_columns idc ON idc.object_id = t.object_id
 WHERE
-	OBJECT_NAME(ic.OBJECT_ID) = '{TABLE_NAME}' AND
+	OBJECT_NAME(ic.object_id) = '{TABLE_NAME}' AND
     schema_name(t.schema_id) = '{SCHEMA_NAME}' AND
     tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
 ORDER BY is_identity DESC

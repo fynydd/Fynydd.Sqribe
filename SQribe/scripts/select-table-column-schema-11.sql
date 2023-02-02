@@ -58,13 +58,13 @@ LEFT OUTER JOIN (
 ) isc ON isc.TABLE_SCHEMA = tables.TABLE_SCHEMA AND isc.TABLE_NAME = tables.TABLE_NAME AND isc.COLUMN_NAME = columns.name
 LEFT OUTER JOIN (
 	SELECT
-        OBJECT_NAME(OBJECT_ID) AS TABLE_NAME,
+        OBJECT_NAME(object_id) AS TABLE_NAME,
         NAME AS IDENTITY_COLUMN_NAME,
-        SEED_VALUE,
-        INCREMENT_VALUE,
-        LAST_VALUE,
-        IS_NOT_FOR_REPLICATION
-    FROM SYS.IDENTITY_COLUMNS
+        seed_value,
+        increment_value,
+        last_value,
+        is_not_for_replication
+    FROM sys.identity_columns
 ) idents ON isc.TABLE_NAME = idents.TABLE_NAME AND isc.COLUMN_NAME = idents.IDENTITY_COLUMN_NAME
 LEFT OUTER JOIN (
 	SELECT *
