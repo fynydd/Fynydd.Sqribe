@@ -259,7 +259,7 @@ public class UserDefinedTableTypes : IUserDefinedTableTypes
 
                                                                         if (string.IsNullOrWhiteSpace(columns.SafeGetString("IDENTITY_COLUMN_NAME")) == false)
                                                                         {
-                                                                            identity = @" IDENTITY(" + columns.SafeGetString("SEED_VALUE") + "," + columns.SafeGetString("INCREMENT_VALUE") + @")";
+                                                                            identity = @" IDENTITY(" + columns.SafeGetString("seed_value") + "," + columns.SafeGetString("increment_value") + @")";
                                                                         }
 
                                                                         script += @"    " + columns.SafeGetString("COLUMN_NAME") + @" " + dataType + colSize + identity + (columns.SafeGetBoolean("IS_NULLABLE") ? " NULL" : " NOT NULL") + (string.IsNullOrWhiteSpace(columns.SafeGetString("COLUMN_DEFAULT")) == false ? " DEFAULT " + columns.SafeGetString("COLUMN_DEFAULT") : string.Empty);

@@ -351,7 +351,7 @@ public class Tables : ITables
 
                                                                 if (string.IsNullOrWhiteSpace(columns.SafeGetString("IDENTITY_COLUMN_NAME")) == false)
                                                                 {
-                                                                    generatedCol = generatedCol.Replace("1,1", columns.SafeGetString("SEED_VALUE") + "," + columns.SafeGetString("INCREMENT_VALUE"));
+                                                                    generatedCol = generatedCol.Replace("1,1", columns.SafeGetString("seed_value") + "," + columns.SafeGetString("increment_value"));
                                                                 }
 
                                                                 else

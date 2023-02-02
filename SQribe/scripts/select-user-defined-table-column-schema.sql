@@ -25,9 +25,9 @@ SELECT DISTINCT
 	, pk.ignore_dup_key
     , c.is_identity
     , i.name [IDENTITY_COLUMN_NAME]
-    , i.seed_value [SEED_VALUE]
-    , i.increment_value [INCREMENT_VALUE]
-    , i.last_value [LAST_VALUE]
+    , i.seed_value [seed_value]
+    , i.increment_value [increment_value]
+    , i.last_value [last_value]
     , schema_name(y.schema_id) [DOMAIN_SCHEMA]
     , type_name(y.user_type_id) [DOMAIN_NAME]
 FROM sys.table_types t
