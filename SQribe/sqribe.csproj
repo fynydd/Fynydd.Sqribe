@@ -5,10 +5,10 @@
     <TargetFramework>net7.0</TargetFramework>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
-    <AssemblyVersion>1.7.1.0</AssemblyVersion>
-    <Version>1.7.1.0</Version>
-    <FileVersion>1.7.1.0</FileVersion>
-    <PackageVersion>1.7.1.0</PackageVersion>
+    <AssemblyVersion>1.7.2.0</AssemblyVersion>
+    <Version>1.7.2.0</Version>
+    <FileVersion>1.7.2.0</FileVersion>
+    <PackageVersion>1.7.2.0</PackageVersion>
     <LangVersion>11</LangVersion>
     <Nullable>enable</Nullable>
   </PropertyGroup>
