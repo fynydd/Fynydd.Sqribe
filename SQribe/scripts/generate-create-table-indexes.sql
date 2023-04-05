@@ -28,11 +28,12 @@ declare @XmlSecondaryTypeDesc varchar(2000)
 declare @IsIncludedColumn int
 declare @TSQLScripCreationIndex varchar(max)
 declare @TSQLScripDisableIndex varchar(max)
+declare @FilterDefinition varchar(2000)
 
 declare CursorIndex cursor for
-select schema_name(t.schema_id) [schema_name], t.name, ix.name as 'index_name',
+select schema_name(t.schema_id) [schema_name], t.name, ix.name as 'index_name', ix.filter_definition,
         case when xi.xml_index_type IS NULL AND ix.is_unique = 1 then 'UNIQUE ' else '' END +
-            case when xi.xml_index_type = 0 then 'PRIMARY ' else '' END as 'index_type'
+        case when xi.xml_index_type = 0 then 'PRIMARY ' else '' END as 'index_type'
      , ix.type_desc, '' +
                      CASE when ix.type_desc LIKE '%CLUSTERED COLUMNSTORE' THEN
                                   'COMPRESSION_DELAY=' + CAST(ix.compression_delay AS varchar(255))
@@ -55,7 +56,7 @@ where ix.type>0 and ix.is_primary_key=0 and ix.is_unique_constraint=0
 order by schema_name(t.schema_id), t.name, ix.name
 
     open CursorIndex
-fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions, @is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
+fetch next from CursorIndex into @SchemaName, @TableName, @IndexName, @FilterDefinition, @is_unique, @IndexTypeDesc, @IndexOptions, @is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
 
     while (@@fetch_status=0)
 begin
@@ -103,13 +104,16 @@ close CursorIndexColumn
  set @TSQLScripCreationIndex='CREATE '+ @is_unique  +@IndexTypeDesc + ' INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName)+ IIF(LEN(@IndexColumns) > 1, ' ('+@IndexColumns+') ', '')+ 
   case when len(@IncludedColumns)>0 then CHAR(13) +'INCLUDE (' + @IncludedColumns+ ')' else '' end + CHAR(13) + 
   case when @PrimaryXmlIndexName IS NOT NULL then 'USING XML INDEX [' + @PrimaryXmlIndexName + '] FOR ' + @XmlSecondaryTypeDesc + ' ' else '' end + 
+  case when len(@FilterDefinition)>0 then CHAR(13) +'WHERE ' + @FilterDefinition else '' end + CHAR(13) + 
   'WITH (' + @IndexOptions+ ')' + case when @IsPrimaryXml IS NULL then ' ON ' + QUOTENAME(@FileGroupName) + ';' else ';' end
 
  if @is_disabled=1 
   set  @TSQLScripDisableIndex=  CHAR(13) +'ALTER INDEX ' +QUOTENAME(@IndexName) + ' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) + ' DISABLE;' + CHAR(13) 
 
 if @IndexTypeDesc = 'CLUSTERED COLUMNSTORE' begin
-    set @TSQLScripCreationIndex='CREATE '+ @is_unique + 'CLUSTERED COLUMNSTORE INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) +' WITH (' + @IndexOptions+ ') ON ' + QUOTENAME(@FileGroupName) + ';'
+    set @TSQLScripCreationIndex='CREATE '+ @is_unique + 'CLUSTERED COLUMNSTORE INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) +
+    case when len(@FilterDefinition)>0 then CHAR(13) +'WHERE ' + @FilterDefinition else '' end + CHAR(13) + 
+    ' WITH (' + @IndexOptions+ ') ON ' + QUOTENAME(@FileGroupName) + ';'
 end
 
 if @IndexTypeDesc = 'NONCLUSTERED COLUMNSTORE' begin
@@ -121,14 +125,14 @@ INSERT INTO #Results
 VALUES
     (@SchemaName, @TableName, @IndexName, @TSQLScripCreationIndex + CHAR(13) + CHAR(10) + @TSQLScripDisableIndex + CHAR(13) + CHAR(10) + 'GO -- SQRIBE/GO' + CHAR(13) + CHAR(10), @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc)
 
-    fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions, @is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
+    fetch next from CursorIndex into  @SchemaName, @TableName, @IndexName, @FilterDefinition, @is_unique, @IndexTypeDesc, @IndexOptions, @is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
 end
 
 
 -- VIEWS
 
 declare CursorIndex2 cursor for
-select schema_name(t.schema_id) [schema_name], t.name, ix.name,
+select schema_name(t.schema_id) [schema_name], t.name, ix.name, ix.filter_definition,
         case when xi.xml_index_type IS NULL AND ix.is_unique = 1 then 'UNIQUE ' else '' END +
         case when xi.xml_index_type = 0 then 'PRIMARY ' else '' END
      , ix.type_desc, '' +
@@ -153,7 +157,7 @@ where ix.type>0 and ix.is_primary_key=0 and ix.is_unique_constraint=0 --and sche
 order by schema_name(t.schema_id), t.name, ix.name
 
     open CursorIndex2
-fetch next from CursorIndex2 into  @SchemaName, @TableName, @IndexName, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
+fetch next from CursorIndex2 into @SchemaName, @TableName, @IndexName, @FilterDefinition, @is_unique, @IndexTypeDesc, @IndexOptions,@is_disabled, @FileGroupName, @IsPrimaryXml, @PrimaryXmlIndexId, @PrimaryXmlIndexName, @XmlSecondaryTypeDesc
 
     while (@@fetch_status=0)
 begin
@@ -199,17 +203,22 @@ close CursorIndex2Column
  set @TSQLScripCreationIndex='CREATE '+ @is_unique  +@IndexTypeDesc + ' INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName)+ IIF(LEN(@IndexColumns) > 1, ' ('+@IndexColumns+') ', '')+ 
   case when len(@IncludedColumns)>0 then CHAR(13) +'INCLUDE (' + @IncludedColumns+ ')' else '' end + CHAR(13) + 
   case when @PrimaryXmlIndexName IS NOT NULL then 'USING XML INDEX [' + @PrimaryXmlIndexName + '] FOR ' + @XmlSecondaryTypeDesc + ' ' else '' end + 
+  case when len(@FilterDefinition)>0 then CHAR(13) +'WHERE ' + @FilterDefinition else '' end + CHAR(13) + 
   'WITH (' + @IndexOptions+ ')' + case when @IsPrimaryXml IS NULL then ' ON ' + QUOTENAME(@FileGroupName) + ';' else ';' end
 
  if @is_disabled=1 
   set  @TSQLScripDisableIndex=  CHAR(13) +'ALTER INDEX ' +QUOTENAME(@IndexName) + ' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) + ' DISABLE;' + CHAR(13) 
 
 if @IndexTypeDesc = 'CLUSTERED COLUMNSTORE' begin
-    set @TSQLScripCreationIndex='CREATE '+ @is_unique + 'CLUSTERED COLUMNSTORE INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) +' WITH (' + @IndexOptions+ ') ON ' + QUOTENAME(@FileGroupName) + ';'
+    set @TSQLScripCreationIndex='CREATE '+ @is_unique + 'CLUSTERED COLUMNSTORE INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) +
+    case when len(@FilterDefinition)>0 then CHAR(13) +'WHERE ' + @FilterDefinition else '' end + CHAR(13) + 
+    ' WITH (' + @IndexOptions+ ') ON ' + QUOTENAME(@FileGroupName) + ';'
 end
 
 if @IndexTypeDesc = 'NONCLUSTERED COLUMNSTORE' begin
-    set @TSQLScripCreationIndex='CREATE '+ @is_unique + 'NONCLUSTERED COLUMNSTORE INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) + IIF(LEN(@IndexColumns) > 1, ' ('+@IndexColumns+')', '')+  +' WITH (' + @IndexOptions+ ') ON ' + QUOTENAME(@FileGroupName) + ';'
+    set @TSQLScripCreationIndex='CREATE '+ @is_unique + 'NONCLUSTERED COLUMNSTORE INDEX ' +QUOTENAME(@IndexName)+' ON ' + QUOTENAME(@SchemaName) +'.'+ QUOTENAME(@TableName) + IIF(LEN(@IndexColumns) > 1, ' ('+@IndexColumns+')', '')+ 
+    case when len(@FilterDefinition)>0 then CHAR(13) +'WHERE ' + @FilterDefinition else '' end + CHAR(13) + 
+    ' WITH (' + @IndexOptions+ ') ON ' + QUOTENAME(@FileGroupName) + ';'
 end
 
 INSERT INTO #Results
