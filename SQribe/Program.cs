@@ -1385,6 +1385,25 @@ public class App
                 {
                     settings.Log("## ERASE DATABASE");
 
+                    // - Set single user mode
+                    // - Drop extended properties
+                    // - Drop triggers
+                    // - Drop table foreign keys
+                    // - Drop full text catalogs
+                    // - Drop indexes
+                    // - Drop triggers
+                    // - Drop views
+                    // - Drop stored procedures
+                    // - Drop table primary keys
+                    // - Drop tables
+                    // - Drop user-defined table types
+                    // - Drop user-defined data types
+                    // - Drop user-defined functions
+                    // - Drop XML schema collections
+                    // - Drop schemas
+                    // - Drop default types
+                    // - Set multi-user mode
+
                     settings.Log("- Set single user mode...");
                     helpers.Exec(helpers.LoadScript("set-single-user-mode.sql"), token, showProgress: false, prefix: string.Empty, ignoreErrors: true);
 
