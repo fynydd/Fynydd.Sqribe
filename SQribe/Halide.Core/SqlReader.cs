@@ -56,6 +56,7 @@ public sealed class SqlReader: IDisposable
 		{
 			SqlCommand.CommandText = config.CommandText;
 			SqlCommand.Connection = SqlConnection;
+			SqlCommand.CommandTimeout = 60;
 		}
 
 		catch (Exception e)
