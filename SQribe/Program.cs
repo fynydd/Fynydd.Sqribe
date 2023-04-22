@@ -59,6 +59,15 @@ public class Program
         // Create service provider
         var serviceProvider = serviceCollection.BuildServiceProvider();
 
+        #region Debugging Code
+        
+        // args = new[]
+        // {
+        //     "test-backup"
+        // };
+        
+        #endregion
+        
         // Run the application
         serviceProvider.GetService<App>()?.Run(args);
     }
@@ -470,6 +479,7 @@ public class App
                     // ReSharper disable once ConvertIfStatementToSwitchStatement
                     if (settings.Abort == false && task.IsFaulted == false && timer.GetSeconds<int>() <= timeout)
                     {
+                        
                         output.WriteLine("OK", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
                         output.WriteBullet(token);
                         output.Write("Checking connection to database server", token);

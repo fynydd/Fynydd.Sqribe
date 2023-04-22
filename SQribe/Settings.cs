@@ -1517,17 +1517,43 @@ internal class Settings : ISettings
         var result = ProcessFolderPath(path);
         var filePath = result + "HELP.txt";
 
+        if (File.Exists(filePath))
+            return result;
+        
+        result = ProcessFolderPath(Directory.GetCurrentDirectory());
+        filePath = result + "HELP.txt";
+
         if (File.Exists(filePath) == false)
         {
-            result = ProcessFolderPath(Directory.GetCurrentDirectory());
-            filePath = result + "HELP.txt";
+            result = string.Empty;
+        }
 
-            if (File.Exists(filePath) == false)
+        #region Fallback When Debugging...
+        
+        if (string.IsNullOrEmpty(result))
+        {
+            result = ProcessFolderPath(Directory.GetCurrentDirectory());
+
+            if (result.ToLower().Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar + "debug"))
+            {
+                result = result.Left(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            
+                filePath = result + "HELP.txt";
+
+                if (File.Exists(filePath) == false)
+                {
+                    result = string.Empty;
+                }
+            }
+
+            else
             {
                 result = string.Empty;
             }
         }
-
+        
+        #endregion        
+        
         return result;
     }
 
