@@ -209,7 +209,7 @@ public class TableData : ITableData
             using (var reader = new SqlReader(new SqlReaderConfiguration
                    {
                        ConnectionString = settings.DataSource,
-                       CommandText = helpers.LoadScript("select-table-dependencies.sql")
+                       CommandText = helpers.LoadScript(settings.TurboMode ? "select-table-names.sql" : "select-table-dependencies.sql")
                    }))
             {
                 if (settings.Abort == false)
@@ -269,7 +269,7 @@ public class TableData : ITableData
             using (var tables = new SqlReader(new SqlReaderConfiguration
                    {
                        ConnectionString = settings.DataSource,
-                       CommandText = helpers.LoadScript("select-table-dependencies.sql")
+                       CommandText = helpers.LoadScript(settings.TurboMode ? "select-table-names.sql" : "select-table-dependencies.sql")
                    }))
             {
                 var level = -1;
