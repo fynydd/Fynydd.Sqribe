@@ -1435,7 +1435,7 @@ public class App
                     settings.Log("- Dropping indexes...");
                     TableIndexes.DropAll(token);
 
-                    settings.Log("- Dropping triggers...");
+                    settings.Log("- Dropping table check constraints...");
                     TableCheckConstraints.DropAll(token);
 
                     settings.Log("- Dropping views...");
