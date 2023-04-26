@@ -71,9 +71,9 @@ public sealed class SqlReader: IDisposable
 			return null;
 
 		if (token == null)
-			SqlConnection.OpenAsync().GetAwaiter();
+			SqlConnection.OpenAsync().GetAwaiter().GetResult();
 		else
-			SqlConnection.OpenAsync(token.Value).GetAwaiter();
+			SqlConnection.OpenAsync(token.Value).GetAwaiter().GetResult();
 
 		if (SqlConnection.State != ConnectionState.Open)
 			throw new Exception($"ExecuteReader() => Could not open a SQL Server connection; ({SqlConnection?.State})");
