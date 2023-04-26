@@ -479,7 +479,6 @@ public class App
                     // ReSharper disable once ConvertIfStatementToSwitchStatement
                     if (settings.Abort == false && task.IsFaulted == false && timer.GetSeconds<int>() <= timeout)
                     {
-                        
                         output.WriteLine("OK", token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
                         output.WriteBullet(token);
                         output.Write("Checking connection to database server", token);
@@ -514,56 +513,79 @@ public class App
 
                             settings.CurrentSqlMajorVersion = 0;
                                 
-                            if (int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[0], out var majorVersion))
+                            var sqlReader = new SqlReader(new SqlReaderConfiguration
                             {
-                                _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[1], out var minorVersion);
-                                _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[2], out var buildVersion);
+                                ConnectionString = settings.DataSource,
+                                CommandText = @"select serverproperty('ResourceVersion');"
+                            });
 
-                                if (Constants.SqlServerVersions.ContainsValue(majorVersion))
+                            using (sqlReader.ExecuteReader())
+                            {
+                                if (sqlReader.HasRows)
                                 {
-                                    sqlServerVersion = $"SQL Server {Constants.SqlServerVersions.FirstOrDefault(x => x.Value == majorVersion).Key} ({majorVersion}.{minorVersion}.{buildVersion})";
-                                    supported = true;
+                                    sqlReader.Read();
 
-                                    output.WriteLine(sqlServerVersion, token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
+                                    var serverVersion = sqlReader.SafeGetString(0);
 
-                                    settings.CurrentSqlMajorVersion = majorVersion;
-                                    settings.Log("- Result: " + sqlServerVersion);
+                                    if (int.TryParse(serverVersion.Split('.')[0], out var majorVersion))
+                                    {
+                                        _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[1], out var minorVersion);
+                                        _ = int.TryParse((cn.ServerVersion ?? string.Empty).Split('.')[2], out var buildVersion);
+
+                                        if (Constants.SqlServerVersions.ContainsValue(majorVersion))
+                                        {
+                                            sqlServerVersion = $"SQL Server {Constants.SqlServerVersions.FirstOrDefault(x => x.Value == majorVersion).Key} ({majorVersion}.{minorVersion}.{buildVersion})";
+                                            supported = true;
+
+                                            output.WriteLine(sqlServerVersion, token, (int)Constants.GetColor("success", settings.ConsoleDarkMode));
+
+                                            settings.CurrentSqlMajorVersion = majorVersion;
+                                            settings.Log($"- Result: {sqlServerVersion}");
+                                        }
+
+                                        else
+                                        {
+                                            output.WriteLine("Unsupported SQL Server edition", token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
+
+                                            settings.Log($"- Result: Unsupported SQL Server edition ({majorVersion})");
+                                        }
+                                    }
+
+                                    else
+                                    {
+                                        output.WriteLine("Could not detect SQL Server edition", token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
+
+                                        settings.Log($"- Result: Could not detect SQL Server edition ({serverVersion})");
+                                    }
                                 }
 
                                 else
                                 {
-                                    output.WriteLine("Unsupported SQL Server edition", token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
+                                    output.WriteLine("Could not detect SQL Server edition", token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
 
-                                    settings.Log("- Result: Unsupported SQL Server edition (" + majorVersion + ")");
+                                    settings.Log("- Result: Could not detect SQL Server edition");
                                 }
-                            }
-
-                            else
-                            {
-                                output.WriteLine("Could not detect SQL Server edition", token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
-
-                                settings.Log("- Result: Could not detect SQL Server edition (" + cn.ServerVersion + ")");
-                            }
-
-                            if (supported == false)
-                            {
-                                output.WriteLine (string.Empty, token);
-                                output.WriteLine("Press [Y] or [ENTER] to continue anyway, or any other key to cancel" + Constants.Ellipsis, token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
-
-                                output.Write (string.Empty, token);
-
-                                output.WaitForOutput();
-
-                                var key = Console.ReadKey(true);
-
-                                if (key.Key != ConsoleKey.Enter && key.Key != ConsoleKey.Y)
+                                
+                                if (supported == false)
                                 {
-                                    settings.Abort = true;
+                                    output.WriteLine (string.Empty, token);
+                                    output.WriteLine("Press [Y] or [ENTER] to continue anyway, or any other key to cancel" + Constants.Ellipsis, token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
+
+                                    output.Write (string.Empty, token);
+
+                                    output.WaitForOutput();
+
+                                    var key = Console.ReadKey(true);
+
+                                    if (key.Key != ConsoleKey.Enter && key.Key != ConsoleKey.Y)
+                                    {
+                                        settings.Abort = true;
+                                    }
+
+                                    output.WriteLine (string.Empty, token);
                                 }
-
-                                output.WriteLine (string.Empty, token);
                             }
-
+                            
                             #endregion
 
                             #region Check Database Permissions
@@ -1410,8 +1432,8 @@ public class App
                     // - Drop user-defined data types
                     // - Drop user-defined functions
                     // - Drop XML schema collections
-                    // - Drop schemas
                     // - Drop default types
+                    // - Drop schemas
                     // - Set multi-user mode
 
                     settings.Log("- Set single user mode...");
@@ -1462,11 +1484,11 @@ public class App
                     settings.Log("- Dropping XML schema collections...");
                     XmlSchemaCollections.DropAll(token);
 
-                    settings.Log("- Dropping schemas...");
-                    Schemas.DropAll(token);
-
                     settings.Log("- Dropping default types...");
                     DefaultTypes.DropAll(token);
+
+                    settings.Log("- Dropping schemas...");
+                    Schemas.DropAll(token);
 
                     settings.Log("- Setting multi-user mode...");
                     helpers.Exec(helpers.LoadScript("set-multi-user-mode.sql"), token, showProgress: false, prefix: string.Empty, ignoreErrors: true);
