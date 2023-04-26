@@ -1,5 +1,5 @@
 
--- Drop all user-defined data types
+-- Drop all user-defined table types
 
 DECLARE @dynsql NVARCHAR(max)
 SET @dynsql = ''
