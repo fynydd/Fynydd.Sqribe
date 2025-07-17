@@ -4,6 +4,7 @@
     "chunk_size_mb": 10,
     "compress_data": false,
     "confirm_start": true,
+    "confirm_warnings": true,
     "console_dark_mode": true,
     "data_exclusions": "",
     "objects": "all",
