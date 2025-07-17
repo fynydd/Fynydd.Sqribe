@@ -45,6 +45,7 @@ public interface ISettings
     bool ChunkData { get; set; }
     bool CompressData { get; set; }
     bool ConfirmStart { get; set; }
+    bool ConfirmWarnings { get; set; }
     bool ConnectionGood { get; set; }
     bool ConsoleDarkMode { get; set; }
     bool DoNotLog { get; set; }
@@ -348,6 +349,7 @@ internal class Settings : ISettings
     public bool ChunkData { get; set; }
     public bool CompressData { get; set; }
     public bool ConfirmStart { get; set; }
+    public bool ConfirmWarnings { get; set; }
     public bool ConnectionGood { get; set; }
     public bool ConsoleDarkMode { get; set; }
     public bool DoNotLog
@@ -504,6 +506,7 @@ internal class Settings : ISettings
         //OutputPath = ProcessFolderPath(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
         CompressData = false;
         ConfirmStart = true;
+        ConfirmWarnings = true;
         ConsoleDarkMode = true;
         SuppressStartWarnings = false;
         BeepOnCompletion = true;
@@ -685,6 +688,11 @@ internal class Settings : ISettings
             if (item.Key.ToLower() == "confirm_start")
             {
                 ConfirmStart = jt.Value<bool>();
+            }
+
+            if (item.Key.ToLower() == "confirm_warnings")
+            {
+                ConfirmWarnings = jt.Value<bool>();
             }
 
             if (item.Key.ToLower() == "data_blacklist" || item.Key.ToLower() == "data_exclusions")

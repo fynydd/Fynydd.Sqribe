@@ -63,6 +63,9 @@ Zip data insert script files to save disk space (default: false).
 /confirm_start:
 Require a keypress to begin a backup (default: true).
 
+/confirm_warnings:
+Require a keypress to continue when warnings occur
+
 /console_dark_mode:
 When enabled output is light in color; dark when disabled (default: true).
 
@@ -139,6 +142,9 @@ Makes a beep sound when a SQribe operation completes (default: true).
 
 /confirm_start:
 Require a keypress to begin a restore (default: true).
+
+/confirm_warnings:
+Require a keypress to continue when warnings occur
 
 /console_dark_mode:
 When enabled output is light in color; dark when disabled (default: true).
@@ -221,6 +227,7 @@ Backup file format:
     "chunk_size_mb": 10,
     "compress_data": false,
     "confirm_start": true,
+    "confirm_warnings": true,
     "console_dark_mode": true,
     "data_exclusions": "",
     "data_source": "server=localhost; database=Adv... etc.",
@@ -236,6 +243,7 @@ Restore file format:
     "mode": "restore",
     "beep_on_completion": true,
     "confirm_start": true,
+    "confirm_warnings": true,
     "console_dark_mode": true,
     "data_source": "server=localhost; database=Adv... etc.",
     "erase_database": true,

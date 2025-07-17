@@ -566,7 +566,7 @@ public class App
                                     settings.Log("- Result: Could not detect SQL Server edition");
                                 }
                                 
-                                if (supported == false)
+                                if (supported == false && settings.ConfirmWarnings)
                                 {
                                     output.WriteLine (string.Empty, token);
                                     output.WriteLine("Press [Y] or [ENTER] to continue anyway, or any other key to cancel" + Constants.Ellipsis, token, (int)Constants.GetColor("warning", settings.ConsoleDarkMode));
@@ -686,7 +686,7 @@ public class App
                                 }
                                 
 
-                                if (foundPermissions.Count < permissionsToCheck.Length)
+                                if (foundPermissions.Count < permissionsToCheck.Length && settings.ConfirmWarnings)
                                 {
                                     var missingPermissions = string.Empty;
 

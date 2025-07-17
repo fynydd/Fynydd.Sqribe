@@ -1,6 +1,7 @@
 {
     "beep_on_completion": true,
     "confirm_start": true,
+    "confirm_warnings": true,
     "console_dark_mode": true,
     "erase_database": true,
     "objects": "all",
